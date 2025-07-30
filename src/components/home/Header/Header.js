@@ -80,7 +80,7 @@ const Header = () => {
           <Link to="/">
             <div>
               <h1 className="font-titleFont text-3xl font-medium text-white">
-                EasyTicket.LK
+                Ticket.LK
               </h1>
             </div>
           </Link>
