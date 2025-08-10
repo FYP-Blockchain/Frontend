@@ -112,7 +112,7 @@ const router = createBrowserRouter(
       <Route path="/signup" element={<SignUp />} />
       <Route path="/signin" element={<SignIn />} />
       
-      <Route path="/admin" element={<AdminRoute element={<AdminDashboard />} />} />
+      <Route path="/admindashboard" element={<AdminRoute element={<AdminDashboard />} />} />
       <Route path="/adminpanel" element={<AdminRoute element={<AdminPanel />} />} />
       <Route path="/eventcreation" element={<AdminRoute element={<CreateEvent />} />} />
       <Route path="/eventlist" element={<AdminRoute element={<EventList />} />} />
