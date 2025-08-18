@@ -36,45 +36,85 @@ const SignUp = () => {
   });
 
   const onSubmit = async (data: SignUpFormData) => {
-    setIsSubmitting(true);
-    
-    try {
-      const payload = {
-        username: data.username,
-        email: data.email,
-        password: data.password,
-        roles: [data.roles], // Convert to array as expected by backend
-      };
-      
-      console.log("Sign up attempt:", payload);
-      
-      // In real implementation, this would be:
-      // const response = await fetch('/api/auth/signup', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(payload),
-      // });
-      
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      toast({
-        title: "Account Created Successfully!",
-        description: "Welcome to NFTickets! Please sign in to continue.",
-      });
-      
-      // Redirect to sign in page
-      navigate('/signin');
-    } catch (error) {
-      toast({
-        title: "Registration Failed",
-        description: "Unable to create account. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
+  setIsSubmitting(true);
+  
+  const payload = {
+    username: data.username,
+    email: data.email,
+    password: data.password,
+    roles: [data.roles.toLowerCase()], // Ensure lowercase to match backend (e.g., "admin" or "user")
   };
+  
+  try {
+    const response = await fetch('/api/auth/signup', {  // Proxied to localhost:8081
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || 'Registration failed');
+    }
+
+    const result = await response.text();  // Backend returns string like "User registered successfully!"
+    
+    toast({
+      title: "Account Created Successfully!",
+      description: result,
+    });
+    
+    navigate('/signin');
+  } catch (error) {
+    toast({
+      title: "Registration Failed",
+      description: error.message || "Unable to create account. Please try again.",
+      variant: "destructive",
+    });
+  } finally {
+    setIsSubmitting(false);
+  }
+};
+  // const onSubmit = async (data: SignUpFormData) => {
+  //   setIsSubmitting(true);
+    
+  //   try {
+  //     const payload = {
+  //       username: data.username,
+  //       email: data.email,
+  //       password: data.password,
+  //       roles: [data.roles], // Convert to array as expected by backend
+  //     };
+      
+  //     console.log("Sign up attempt:", payload);
+      
+  //     // In real implementation, this would be:
+  //     // const response = await fetch('/api/auth/signup', {
+  //     //   method: 'POST',
+  //     //   headers: { 'Content-Type': 'application/json' },
+  //     //   body: JSON.stringify(payload),
+  //     // });
+      
+  //     // Simulate API call delay
+  //     await new Promise(resolve => setTimeout(resolve, 2000));
+      
+  //     toast({
+  //       title: "Account Created Successfully!",
+  //       description: "Welcome to NFTickets! Please sign in to continue.",
+  //     });
+      
+  //     // Redirect to sign in page
+  //     navigate('/signin');
+  //   } catch (error) {
+  //     toast({
+  //       title: "Registration Failed",
+  //       description: "Unable to create account. Please try again.",
+  //       variant: "destructive",
+  //     });
+  //   } finally {
+  //     setIsSubmitting(false);
+  //   }
+  // };
 
   return (
     <div className="min-h-screen bg-gradient-hero flex items-center justify-center py-8">
