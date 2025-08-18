@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> f69f2ff078722fa8852aea760ad1dfb2672eb294
 User-agent: Googlebot
 Allow: /
 
@@ -12,3 +16,11 @@ Allow: /
 
 User-agent: *
 Allow: /
+<<<<<<< HEAD
+=======
+=======
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Disallow:
+>>>>>>> 5e85913aeb2df75bb777e28ce352b60d1751aa1d
+>>>>>>> f69f2ff078722fa8852aea760ad1dfb2672eb294
