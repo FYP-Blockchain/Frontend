@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 User-agent: Googlebot
 Allow: /
 
@@ -12,3 +13,8 @@ Allow: /
 
 User-agent: *
 Allow: /
+=======
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Disallow:
+>>>>>>> 5e85913aeb2df75bb777e28ce352b60d1751aa1d
