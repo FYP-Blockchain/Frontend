@@ -14,27 +14,28 @@ const Events = () => {
   const events = [
     {
       id: 1,
-      title: "Tech Conference 2024",
-      date: "2024-03-15",
-      time: "09:00 AM",
-      venue: "Convention Center, NYC",
-      price: "0.15 ETH",
-      fiatPrice: "$299",
-      image: "/api/placeholder/400/240",
-      category: "conference",
-      available: 250,
-      total: 500,
+      title: "Abhi Music Concert (අභී)",
+      date: "2025-11-01",
+      time: "06:00 PM",
+      venue: "Cinnamon Lakeside - A/C Marquee",
+      price: "0.25 ETH",
+      fiatPrice: "$499",
+      image: "https://storage.googleapis.com/oneticket/32228206-83472ffb-eec6-4989-ae5c-04d0baa506c2.jpg",
+      category: "music",
+      available: 1000,
+      total: 2000,
       verified: true,
     },
+    
     {
       id: 2,
-      title: "NFT Art Gallery Opening",
-      date: "2024-03-20",
+      title: "BailaMo Live in Concert",
+      date: "2025-10-20",
       time: "07:00 PM",
       venue: "Modern Art Museum",
       price: "0.08 ETH",
       fiatPrice: "$159",
-      image: "/api/placeholder/400/240",
+      image: "https://assets.mytickets.lk/images/events/Baila%20Mo/BAILAMO%20Web%20Dimension-1754027767722.png",
       category: "art",
       available: 80,
       total: 150,
@@ -42,13 +43,13 @@ const Events = () => {
     },
     {
       id: 3,
-      title: "Blockchain Workshop",
-      date: "2024-03-25",
+      title: "Inspiring the Next Billionaire",
+      date: "2025-09-25",
       time: "02:00 PM",
       venue: "Tech Hub Downtown",
       price: "0.05 ETH",
       fiatPrice: "$99",
-      image: "/api/placeholder/400/240",
+      image: "https://assets.mytickets.lk/images/events/BNI%20INSPIRE/WhatsApp%20Image%202025-07-25%20at%2019.14.29-1753451654571.jpeg",
       category: "workshop",
       available: 45,
       total: 100,
@@ -56,16 +57,64 @@ const Events = () => {
     },
     {
       id: 4,
-      title: "Metaverse Music Festival",
-      date: "2024-04-01",
+      title: " අවදියේ ආදරය - Awadiye Adaraya",
+      date: "2025-09-01",
       time: "06:00 PM",
       venue: "Virtual Reality Arena",
       price: "0.25 ETH",
       fiatPrice: "$499",
-      image: "/api/placeholder/400/240",
+      image: "https://assets.mytickets.lk/images/events/%E0%B6%85%E0%B7%80%E0%B6%AF%E0%B7%92%E0%B6%BA%E0%B7%9A%20%E0%B6%86%E0%B6%AF%E0%B6%BB%E0%B6%BA/1x1%20poster%20new%20(1)-1751368278560.jpg",
       category: "music",
-      available: 1000,
+      available: 1100,
       total: 2000,
+      verified: true,
+    },
+
+    
+
+    
+    {
+      id: 5,
+      title: "Tech Conference 2024",
+      date: "2025-10-15",
+      time: "09:00 AM",
+      venue: "Elphinstone Theatre",
+      price: "0.15 ETH",
+      fiatPrice: "$299",
+      image: "https://assets.mytickets.lk/images/events/Photo%20Tecno%202025%20/WhatsApp%20Image%202025-07-14%20at%2008.44.36_b7c067b5%20tk%20(1)-1752481415826.jpg",
+      category: "conference",
+      available: 200,
+      total: 500,
+      verified: true,
+    },
+
+    {
+      id: 6,
+      title: "Yugaswara ( යුගාස්වර )",
+      date: "2025-10-18",
+      time: "07:00 PM",
+      venue: "Holly Cross Auditorium Gampaha",
+      price: "0.15 ETH",
+      fiatPrice: "$299",
+      image: "https://assets.mytickets.lk/images/events/Yugaswara%20(%20%E0%B6%BA%E0%B7%94%E0%B6%9C%E0%B7%8F%E0%B7%83%E0%B7%8A%E0%B7%80%E0%B6%BB%20)/WhatsApp%20Image%202025-07-15%20at%2014.33.37-1752742471051.jpeg",
+      category: "music",
+      available: 155,
+      total: 500,
+      verified: true,
+    },
+
+    {
+      id: 7,
+      title: "The Nalin Show",
+      date: "2025-09-15",
+      time: "06:00 PM",
+      venue: "BMICH - COLOMBO",
+      price: "0.10 ETH",
+      fiatPrice: "$299",
+      image: "https://assets.mytickets.lk/images/events/The%20Nalin%20Show/WhatsApp%20Image%202025-07-26%20at%2009.17.41-1753504938028.jpeg",
+      category: "music",
+      available: 215,
+      total: 500,
       verified: true,
     },
   ];
@@ -79,9 +128,11 @@ const Events = () => {
   ];
 
   const filteredEvents = events.filter((event) => {
-    const matchesSearch = event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         event.venue.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === "all" || event.category === selectedCategory;
+    const matchesSearch =
+      event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      event.venue.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory =
+      selectedCategory === "all" || event.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
 
@@ -136,26 +187,32 @@ const Events = () => {
         {/* Events Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredEvents.map((event) => (
-            <Card key={event.id} className="bg-glass/80 backdrop-blur-glass border-glass-border hover:shadow-glass transition-all duration-300 group">
-              <CardHeader className="p-0">
-                <div className="relative">
-                  <div className="h-48 bg-gradient-secondary rounded-t-lg flex items-center justify-center">
-                    <div className="text-6xl opacity-20">🎫</div>
-                  </div>
-                  {event.verified && (
-                    <Badge className="absolute top-3 right-3 bg-success/90 text-success-foreground">
-                      <Shield className="h-3 w-3 mr-1" />
-                      Verified
-                    </Badge>
-                  )}
-                </div>
-              </CardHeader>
+            <Card
+              key={event.id}
+              className="bg-glass/80 backdrop-blur-glass border-glass-border hover:shadow-glass transition-all duration-300 group"
+            >
               
+              <CardHeader className="p-0">
+  <div className="relative w-full">
+    <img
+      src={event.image}
+      alt={event.title}
+      className="w-full rounded-t-lg object-cover max-h-[48rem]" // much larger max height
+      style={{ aspectRatio: "16/9" }} // keeps a balanced proportion
+    />
+    {event.verified && (
+      <Badge className="absolute top-3 right-3 bg-success/90 text-success-foreground">
+        <Shield className="h-3 w-3 mr-1" />
+        Verified
+      </Badge>
+    )}
+  </div>
+</CardHeader>
               <CardContent className="p-6">
                 <h3 className="text-xl font-semibold mb-2 group-hover:text-primary transition-colors">
                   {event.title}
                 </h3>
-                
+
                 <div className="space-y-2 text-sm text-muted-foreground mb-4">
                   <div className="flex items-center">
                     <Calendar className="h-4 w-4 mr-2" />

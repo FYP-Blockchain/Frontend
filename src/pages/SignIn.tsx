@@ -30,45 +30,83 @@ const SignIn = () => {
     },
   });
 
-  const onSubmit = async (data: SignInFormData) => {
-    setIsSubmitting(true);
+  // const onSubmit = async (data: SignInFormData) => {
+  //   setIsSubmitting(true);
     
-    try {
-      console.log("Sign in attempt:", data);
+  //   try {
+  //     console.log("Sign in attempt:", data);
       
-      // In real implementation, this would be:
-      // const response = await fetch('/api/auth/signin', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(data),
-      // });
-      // const result = await response.json();
-      // localStorage.setItem('token', result.token);
+  //     // In real implementation, this would be:
+  //     // const response = await fetch('/api/auth/signin', {
+  //     //   method: 'POST',
+  //     //   headers: { 'Content-Type': 'application/json' },
+  //     //   body: JSON.stringify(data),
+  //     // });
+  //     // const result = await response.json();
+  //     // localStorage.setItem('token', result.token);
       
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
+  //     // Simulate API call delay
+  //     await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Simulate successful login
-      const mockToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
-      localStorage.setItem('token', mockToken);
-      localStorage.setItem('username', data.username);
+  //     // Simulate successful login
+  //     const mockToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
+  //     localStorage.setItem('token', mockToken);
+  //     localStorage.setItem('username', data.username);
       
-      toast({
-        title: "Welcome back!",
-        description: "You have been successfully signed in.",
-      });
+  //     toast({
+  //       title: "Welcome back!",
+  //       description: "You have been successfully signed in.",
+  //     });
       
-      navigate('/');
-    } catch (error) {
-      toast({
-        title: "Sign In Failed",
-        description: "Invalid username or password. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSubmitting(false);
+  //     navigate('/');
+  //   } catch (error) {
+  //     toast({
+  //       title: "Sign In Failed",
+  //       description: "Invalid username or password. Please try again.",
+  //       variant: "destructive",
+  //     });
+  //   } finally {
+  //     setIsSubmitting(false);
+  //   }
+  // };
+  const onSubmit = async (data: SignInFormData) => {
+  setIsSubmitting(true);
+  
+  try {
+    const response = await fetch('/api/auth/signin', {  // Proxied to localhost:8081
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || 'Sign in failed');
     }
-  };
+
+    const result = await response.json();  // JwtResponse: { token, username, roles }
+    
+    localStorage.setItem('token', result.token);
+    localStorage.setItem('username', result.username);
+    // Optional: Store roles if needed later (e.g., for UI conditional rendering)
+    localStorage.setItem('roles', JSON.stringify(result.roles));
+    
+    toast({
+      title: "Welcome back!",
+      description: "You have been successfully signed in.",
+    });
+    
+    navigate('/');
+  } catch (error) {
+    toast({
+      title: "Sign In Failed",
+      description: error.message || "Invalid username or password. Please try again.",
+      variant: "destructive",
+    });
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   return (
     <div className="min-h-screen bg-gradient-hero flex items-center justify-center py-8">
