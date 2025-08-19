@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { useNavigate } from "react-router-dom";
 import { 
   Calendar, 
   MapPin, 
@@ -232,6 +233,7 @@ const events = [
 ];
 
 const EventDetails = () => {
+  const navigate = useNavigate();
   const { id } = useParams();
   const [selectedPayment, setSelectedPayment] = useState<"crypto" | "card">("crypto");
 
@@ -394,7 +396,7 @@ const EventDetails = () => {
 
                 <Separator className="bg-glass-border" />
 
-                <div>
+                {/* <div>
                   <h4 className="font-medium mb-3">Payment Method</h4>
                   <div className="space-y-2">
                     <Button
@@ -414,15 +416,17 @@ const EventDetails = () => {
                       Pay with Card (Stripe)
                     </Button>
                   </div>
-                </div>
+                </div> */}
+
 
                 <Button 
-                  variant="hero" 
-                  size="lg" 
-                  className="w-full text-base font-semibold"
-                >
-                  Purchase NFT Ticket
-                </Button>
+  variant="hero" 
+  size="lg" 
+  className="w-full text-base font-semibold"
+  onClick={() => navigate("/purchaseticket")}
+>
+  Purchase NFT Ticket
+</Button>
 
                 <div className="text-center text-xs text-muted-foreground">
                   <div className="flex items-center justify-center mb-1">
