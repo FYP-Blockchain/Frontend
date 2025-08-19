@@ -13,8 +13,13 @@ import SignIn from "./pages/SignIn";
 import SignUp from "./pages/SignUp";
 import About from "./pages/About";
 import NotFound from "./pages/NotFound";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsConditions from "./pages/TermsConditions";
+import PurchaseTicket from "./pages/PurchaseTicket"
+// import Profile from "./pages/Profile";
 
 const queryClient = new QueryClient();
+
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -32,6 +37,10 @@ const App = () => (
             <Route path="/signin" element={<SignIn />} />
             <Route path="/signup" element={<SignUp />} />
             <Route path="/about" element={<About />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/purchaseticket" element={<PurchaseTicket />} />
+           {/* <Route path="/profile" element={<Profile />} />  */}
+          <Route path="/terms" element={<TermsConditions />} />
             <Route path="/my-tickets" element={<div className="min-h-screen bg-gradient-hero flex items-center justify-center"><div className="text-center"><h1 className="text-4xl font-bold bg-gradient-primary bg-clip-text text-transparent mb-4">My Tickets</h1><p className="text-xl text-muted-foreground">Coming soon - View your NFT tickets here</p></div></div>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
