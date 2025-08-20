@@ -1,10 +1,16 @@
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, Wallet, Shield } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useAppDispatch, useAppSelector } from "@/app/hooks";
+import { logout } from "@/features/auth/authSlice";
+import { toast } from "sonner";
 
-// Declare ethereum property on window for TypeScript
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Menu, Wallet, Shield, User, LogOut } from "lucide-react";
+import { RootState } from "@/app/store";
+
 declare global {
   interface Window {
     ethereum?: {
@@ -16,31 +22,50 @@ declare global {
 const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const dispatch = useAppDispatch();
+  const { currentUser } = useAppSelector((state: RootState) => state.auth);
 
-  const navItems = [
-    { href: "/", label: "Home" },
-    { href: "/events", label: "Events" },
-    { href: "/my-tickets", label: "My Tickets" },
-    { href: "/create-event", label: "Create Event" },
-    { href: "/about", label: "About" },
-  ];
+  // Determine user roles for conditional rendering
+  const isOrganizer = currentUser?.roles?.includes('ROLE_ORGANIZER');
+  const isUser = currentUser?.roles?.includes('ROLE_USER');
 
+  const handleLogout = () => {
+    dispatch(logout());
+    toast.success("You have been logged out.");
+    navigate("/");
+  };
+  
   const connectWallet = async () => {
     if (window.ethereum) {
       try {
         await window.ethereum.request({ method: 'eth_requestAccounts' });
-        alert("Wallet connected successfully!");
+        toast.success("Wallet connected successfully!");
       } catch (err) {
         console.error(err);
+        toast.error("Failed to connect wallet.");
       }
     } else {
-      window.open("https://metamask.io/", "_blank");
+      toast.info("MetaMask not found.", {
+        description: "Please install the MetaMask browser extension.",
+        action: {
+          label: "Install",
+          onClick: () => window.open("https://metamask.io/", "_blank"),
+        },
+      });
     }
   };
 
-  const isActive = (path: string) => {
-    return location.pathname === path;
-  };
+  // Dynamically build the navigation items based on user role
+  const navItems = [
+    { href: "/", label: "Home" },
+    { href: "/events", label: "Events" },
+    ...(isUser ? [{ href: "/my-tickets", label: "My Tickets" }] : []),
+    ...(isOrganizer ? [{ href: "/create-event", label: "Create Event" }] : []),
+    { href: "/about", label: "About" },
+  ];
+  
+  const isActive = (path: string) => location.pathname === path;
 
   return (
     <nav className="sticky top-0 z-50 w-full backdrop-blur-glass bg-background/80 border-b border-glass-border">
@@ -64,7 +89,7 @@ const Navigation = () => {
                 to={item.href}
                 className={`text-sm font-medium transition-colors hover:text-primary ${
                   isActive(item.href)
-                    ? "text-primary border-b-2 border-primary"
+                    ? "text-primary"
                     : "text-muted-foreground"
                 }`}
               >
@@ -75,20 +100,39 @@ const Navigation = () => {
 
           {/* Desktop Actions */}
           <div className="hidden md:flex items-center space-x-4">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="border-accent bg-accent/10 text-accent hover:bg-accent hover:text-accent-foreground"
-              onClick={connectWallet}
-            >
+            <Button onClick={connectWallet} variant="outline" size="sm" className="border-accent bg-accent/10 text-accent hover:bg-accent hover:text-accent-foreground">
               <Wallet className="h-4 w-4 mr-2" />
               Connect Wallet
             </Button>
-            <Link to="/signin">
-              <Button size="sm" className="bg-gradient-primary hover:shadow-glow transition-all duration-300">
-                Login/Signup
-              </Button>
-            </Link>
+            
+            {currentUser ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="glass">
+                    <User className="h-4 w-4 mr-2" />
+                    {currentUser.username}
+                    {isOrganizer && <Badge variant="secondary" className="ml-2">Organizer</Badge>}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {/* <DropdownMenuItem onClick={() => navigate('/profile')}>Profile</DropdownMenuItem> */}
+                  {isUser && <DropdownMenuItem onClick={() => navigate('/my-tickets')}>My Tickets</DropdownMenuItem>}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Logout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Link to="/signin">
+                <Button size="sm" className="bg-gradient-primary hover:shadow-glow transition-all duration-300">
+                  Login / Signup
+                </Button>
+              </Link>
+            )}
           </div>
 
           {/* Mobile Menu */}
@@ -115,20 +159,32 @@ const Navigation = () => {
                       {item.label}
                     </Link>
                   ))}
-                  <div className="pt-4 space-y-3">
-                    <Button 
-                      variant="outline" 
-                      className="w-full border-accent bg-accent/10 text-accent hover:bg-accent hover:text-accent-foreground"
-                      onClick={connectWallet}
-                    >
+                  <div className="pt-4 space-y-3 border-t border-glass-border">
+                    {currentUser ? (
+                      <>
+                        <div className="flex items-center px-3 py-2">
+                           <User className="h-5 w-5 mr-3 text-primary" />
+                           <div>
+                              <p className="font-semibold">{currentUser.username}</p>
+                              {isOrganizer && <Badge variant="secondary">Organizer</Badge>}
+                           </div>
+                        </div>
+                        <Button onClick={handleLogout} variant="outline" className="w-full justify-start text-destructive">
+                           <LogOut className="h-4 w-4 mr-2" />
+                           Logout
+                        </Button>
+                      </>
+                    ) : (
+                       <Link to="/signin" onClick={() => setIsOpen(false)}>
+                        <Button className="w-full bg-gradient-primary">
+                          Login / Signup
+                        </Button>
+                      </Link>
+                    )}
+                     <Button onClick={connectWallet} variant="outline" className="w-full border-accent bg-accent/10 text-accent hover:bg-accent hover:text-accent-foreground">
                       <Wallet className="h-4 w-4 mr-2" />
                       Connect Wallet
                     </Button>
-                    <Link to="/signin" onClick={() => setIsOpen(false)}>
-                      <Button className="w-full bg-gradient-primary">
-                        Login/Signup
-                      </Button>
-                    </Link>
                   </div>
                 </div>
               </SheetContent>
