@@ -1,14 +1,17 @@
-import { useState } from "react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Link, useNavigate } from "react-router-dom";
-import { User, Lock, LogIn, UserPlus } from "lucide-react";
+import { useAppDispatch, useAppSelector } from "@/app/hooks";
+import { loginUser } from "@/features/auth/authSlice";
+import { toast } from "sonner";
+
+import { User, Lock, LogIn, UserPlus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { useToast } from "@/hooks/use-toast";
 
 const signInSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
@@ -18,9 +21,9 @@ const signInSchema = z.object({
 type SignInFormData = z.infer<typeof signInSchema>;
 
 const SignIn = () => {
-  const { toast } = useToast();
   const navigate = useNavigate();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const dispatch = useAppDispatch();
+  const { loading, error, currentUser } = useAppSelector((state) => state.auth);
 
   const form = useForm<SignInFormData>({
     resolver: zodResolver(signInSchema),
@@ -30,83 +33,23 @@ const SignIn = () => {
     },
   });
 
-  const onSubmit = async (data: SignInFormData) => {
-  setIsSubmitting(true);
-  
-  try {
-    const response = await fetch('/api/auth/signin', {  // Proxied to localhost:8081
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
+  const onSubmit = (data: SignInFormData) => {
+    dispatch(loginUser(data));
+  };
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(errorText || 'Sign in failed');
+  useEffect(() => {
+    if (currentUser) {
+      toast.success("Welcome back!", {
+        description: "You have been successfully signed in.",
+      });
+      navigate('/'); 
     }
-
-    const result = await response.json();  // JwtResponse: { token, username, roles }
-    
-    localStorage.setItem('token', result.token);
-    localStorage.setItem('username', result.username);
-    // Optional: Store roles if needed later (e.g., for UI conditional rendering)
-    localStorage.setItem('roles', JSON.stringify(result.roles));
-    
-    toast({
-      title: "Welcome back!",
-      description: "You have been successfully signed in.",
-    });
-    
-    navigate('/');
-  } catch (error) {
-    toast({
-      title: "Sign In Failed",
-      description: error.message || "Invalid username or password. Please try again.",
-      variant: "destructive",
-    });
-  } finally {
-    setIsSubmitting(false);
-  }
-};
-  // const onSubmit = async (data: SignInFormData) => {
-  //   setIsSubmitting(true);
-    
-  //   try {
-  //     console.log("Sign in attempt:", data);
-      
-  //     // In real implementation, this would be:
-  //     // const response = await fetch('/api/auth/signin', {
-  //     //   method: 'POST',
-  //     //   headers: { 'Content-Type': 'application/json' },
-  //     //   body: JSON.stringify(data),
-  //     // });
-  //     // const result = await response.json();
-  //     // localStorage.setItem('token', result.token);
-      
-  //     // Simulate API call delay
-  //     await new Promise(resolve => setTimeout(resolve, 2000));
-      
-  //     // Simulate successful login
-  //     const mockToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
-  //     localStorage.setItem('token', mockToken);
-  //     localStorage.setItem('username', data.username);
-      
-  //     toast({
-  //       title: "Welcome back!",
-  //       description: "You have been successfully signed in.",
-  //     });
-      
-  //     navigate('/');
-  //   } catch (error) {
-  //     toast({
-  //       title: "Sign In Failed",
-  //       description: "Invalid username or password. Please try again.",
-  //       variant: "destructive",
-  //     });
-  //   } finally {
-  //     setIsSubmitting(false);
-  //   }
-  // };
+    if (error) {
+      toast.error("Sign In Failed", {
+        description: error || "Invalid username or password. Please try again.",
+      });
+    }
+  }, [currentUser, error, navigate]);
 
   return (
     <div className="min-h-screen bg-gradient-hero flex items-center justify-center py-8">
@@ -175,9 +118,16 @@ const SignIn = () => {
                   variant="hero" 
                   size="lg" 
                   className="w-full"
-                  disabled={isSubmitting}
+                  disabled={loading}
                 >
-                  {isSubmitting ? "Signing In..." : "Sign In"}
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Signing In...
+                    </>
+                  ) : (
+                    "Sign In"
+                  )}
                 </Button>
               </form>
             </Form>
@@ -193,15 +143,6 @@ const SignIn = () => {
                 </Link>
               </p>
             </div>
-
-            <div className="mt-4 text-center">
-              <Button variant="outline" className="w-full border-glass-border bg-glass/30" asChild>
-                <Link to="/signup" className="flex items-center justify-center">
-                  <UserPlus className="h-4 w-4 mr-2" />
-                  Create New Account
-                </Link>
-              </Button>
-            </div>
           </CardContent>
         </Card>
       </div>
@@ -210,5 +151,3 @@ const SignIn = () => {
 };
 
 export default SignIn;
-
-
