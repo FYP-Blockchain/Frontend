@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import useSmoothScrollToTop from "@/hooks/useSmoothScrollToTop";
 import { 
   Shield, 
   Zap, 
@@ -17,6 +18,7 @@ import {
 } from "lucide-react";
 
 const About = () => {
+  useSmoothScrollToTop();
   const features = [
     {
       icon: Shield,

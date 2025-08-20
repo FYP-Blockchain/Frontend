@@ -6,7 +6,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { loginUser } from "@/features/auth/authSlice";
 import { toast } from "sonner";
-
+import useSmoothScrollToTop from "@/hooks/useSmoothScrollToTop";
 import { User, Lock, LogIn, UserPlus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,7 @@ const signInSchema = z.object({
 type SignInFormData = z.infer<typeof signInSchema>;
 
 const SignIn = () => {
+  useSmoothScrollToTop();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const { loading, error, currentUser } = useAppSelector((state) => state.auth);

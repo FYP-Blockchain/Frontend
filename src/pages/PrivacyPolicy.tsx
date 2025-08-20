@@ -1,7 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Shield, Eye, Database, Lock, Users, Globe } from "lucide-react";
+import useSmoothScrollToTop from "@/hooks/useSmoothScrollToTop";
 
 const PrivacyPolicy = () => {
+  useSmoothScrollToTop();
   return (
     <div className="min-h-screen bg-gradient-hero">
       <div className="container mx-auto px-4 py-8">

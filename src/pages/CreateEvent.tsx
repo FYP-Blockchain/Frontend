@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
+import useSmoothScrollToTop from "@/hooks/useSmoothScrollToTop";
 
 const eventSchema = z.object({
   eventId: z.string().optional(),
@@ -35,6 +36,7 @@ const eventSchema = z.object({
 type EventFormData = z.infer<typeof eventSchema>;
 
 const CreateEvent = () => {
+  useSmoothScrollToTop();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useNavigate } from "react-router-dom";
+import useSmoothScrollToTop from "@/hooks/useSmoothScrollToTop";
 import { 
   Calendar, 
   MapPin, 
@@ -233,6 +234,7 @@ const events = [
 ];
 
 const EventDetails = () => {
+  useSmoothScrollToTop();
   const navigate = useNavigate();
   const { id } = useParams();
   const [selectedPayment, setSelectedPayment] = useState<"crypto" | "card">("crypto");

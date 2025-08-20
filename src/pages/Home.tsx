@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import heroImage from "@/assets/hero-blockchain-tickets.jpg";
+import useSmoothScrollToTop from "@/hooks/useSmoothScrollToTop";
 import { 
   Shield, 
   Zap, 
@@ -16,6 +17,7 @@ import {
 } from "lucide-react";
 
 const Home = () => {
+  useSmoothScrollToTop();
   const features = [
     {
       icon: Shield,

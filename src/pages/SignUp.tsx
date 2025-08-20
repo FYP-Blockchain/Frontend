@@ -13,6 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import useSmoothScrollToTop from "@/hooks/useSmoothScrollToTop";
+
 // We no longer need useToast from shadcn
 // import { useToast } from "@/components/ui/use-toast";
 
@@ -31,6 +33,7 @@ const signUpSchema = z.object({
 type SignUpFormData = z.infer<typeof signUpSchema>;
 
 const SignUp = () => {
+  useSmoothScrollToTop();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
 

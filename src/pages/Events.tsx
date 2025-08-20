@@ -5,8 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Calendar, MapPin, Search, Filter, Users, Shield } from "lucide-react";
+import useSmoothScrollToTop from "@/hooks/useSmoothScrollToTop";
 
 const Events = () => {
+  useSmoothScrollToTop();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
 

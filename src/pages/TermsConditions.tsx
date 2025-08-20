@@ -1,7 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Scale, FileText, Shield, Users, Gavel, AlertTriangle } from "lucide-react";
+import useSmoothScrollToTop from "@/hooks/useSmoothScrollToTop";
 
 const TermsConditions = () => {
+  useSmoothScrollToTop();
   return (
     <div className="min-h-screen bg-gradient-hero">
       <div className="container mx-auto px-4 py-8">
