@@ -39,7 +39,7 @@ const App = () => (
             <Route path="/about" element={<About />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/terms" element={<TermsConditions />} />
-            <Route path="/purchaseticket" element={<PurchaseTicket />} />
+            <Route path="/purchaseticket/:id" element={<PurchaseTicket />} />
             
             <Route path="/unauthorized" element={
               <div className="min-h-screen bg-gradient-hero flex items-center justify-center">
