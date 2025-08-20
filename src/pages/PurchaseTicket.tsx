@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,32 +8,57 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import useSmoothScrollToTop from "@/hooks/useSmoothScrollToTop";
-
-import { 
-  Calendar, 
-  MapPin, 
-  Users, 
-  Shield, 
+import {
+  Calendar,
+  MapPin,
+  Users,
+  Shield,
   Clock,
   Wallet,
   CreditCard,
-  Plus,
-  Minus,
   ArrowLeft,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  QrCode
 } from "lucide-react";
+import { createTicket, resetTicketState } from "@/features/ticket/ticketSlice";
+
+// Function to generate 50 seats with A1, B1 format
+const generateSeats = () => {
+  const seats = [];
+  const rows = ['A', 'B', 'C', 'D', 'E'];
+  const seatsPerRow = 10;
+  let availableCount = 0;
+  for (const row of rows) {
+    for (let i = 1; i <= seatsPerRow; i++) {
+      const seatNumber = `${row}${i}`;
+      // For demonstration, seats are available in a pattern
+      const isAvailable = availableCount < 25;
+      seats.push({
+        number: seatNumber,
+        isAvailable: isAvailable,
+      });
+      availableCount++;
+    }
+  }
+  return seats;
+};
+
+const allSeats = generateSeats();
 
 const PurchaseTicket = () => {
   useSmoothScrollToTop();
   const { id } = useParams();
   const navigate = useNavigate();
-  const [quantity, setQuantity] = useState(1);
-  const [selectedPayment, setSelectedPayment] = useState<"crypto" | "card">("crypto");
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [purchaseComplete, setPurchaseComplete] = useState(false);
+  const dispatch = useDispatch();
 
-  // Mock event data - in real app, fetch based on ID
+  const { loading, error, success, ticketId } = useSelector(
+    (state) => state.ticket
+  );
+
+  const [selectedSeat, setSelectedSeat] = useState(null);
+  const [selectedPayment, setSelectedPayment] = useState("crypto");
+
   const event = {
     id: parseInt(id || "1"),
     title: "Tech Conference 2024",
@@ -42,33 +68,52 @@ const PurchaseTicket = () => {
     fullAddress: "123 Convention Ave, New York, NY 10001",
     price: 0.15, // ETH
     fiatPrice: 299, // USD
-    available: 250,
-    total: 500,
+    available: 25, // Updated based on mock data
+    total: 50, // Updated based on mock data
     verified: true,
-    organizer: "TechCorp Events"
+    organizer: "TechCorp Events",
   };
 
+  const quantity = selectedSeat ? 1 : 0;
   const totalPrice = event.price * quantity;
   const totalFiatPrice = event.fiatPrice * quantity;
 
-  const handleQuantityChange = (delta: number) => {
-    const newQuantity = quantity + delta;
-    if (newQuantity >= 1 && newQuantity <= Math.min(10, event.available)) {
-      setQuantity(newQuantity);
+  const handleSeatSelection = (seatNumber) => {
+    if (selectedSeat === seatNumber) {
+      setSelectedSeat(null); // Deselect if already selected
+    } else {
+      setSelectedSeat(seatNumber); // Select new seat
     }
   };
 
-  const handlePurchase = async () => {
-    setIsProcessing(true);
-    
-    // Simulate payment processing
-    setTimeout(() => {
-      setIsProcessing(false);
-      setPurchaseComplete(true);
-    }, 3000);
+  const handlePurchase = () => {
+    // Clear any previous error before attempting a new purchase
+    if (error) {
+      dispatch(resetTicketState());
+    }
+
+    const payload = {
+      publicEventId: event.id,
+      seat: selectedSeat,
+      initialOwner:
+        localStorage.getItem("userWallet") ||
+        "0x2546BcD3c84621e976D8185a91A922aE77ECEc30",
+    };
+    dispatch(createTicket(payload));
   };
 
-  if (purchaseComplete) {
+  useEffect(() => {
+    return () => {
+      dispatch(resetTicketState());
+    };
+  }, [dispatch]);
+
+  const handleSaveToWallet = () => {
+    // Implement logic to save the NFT to a crypto wallet
+    alert(`Saving NFT ticket with Token ID: ${ticketId} to your wallet.`);
+  };
+
+  if (success) {
     return (
       <div className="min-h-screen bg-gradient-hero">
         <div className="container mx-auto px-4 py-8">
@@ -80,44 +125,50 @@ const PurchaseTicket = () => {
                     <CheckCircle className="h-8 w-8 text-success" />
                   </div>
                 </div>
-                
+
                 <div>
                   <h2 className="text-2xl font-bold mb-2">Purchase Successful!</h2>
                   <p className="text-muted-foreground">
-                    Your NFT tickets have been successfully purchased and minted to your wallet.
+                    Your NFT ticket has been successfully purchased and minted to your wallet.
                   </p>
                 </div>
 
                 <div className="bg-glass/30 rounded-lg p-4 border border-glass-border">
                   <h3 className="font-semibold mb-2">{event.title}</h3>
                   <div className="text-sm text-muted-foreground space-y-1">
-                    <div>Quantity: {quantity} ticket{quantity > 1 ? 's' : ''}</div>
+                    <div>Seat: {selectedSeat}</div>
                     <div>Total Paid: {totalPrice.toFixed(3)} ETH (${totalFiatPrice})</div>
-                    <div>Transaction ID: 0x1234...5678</div>
+                    <div>**Token ID**: {ticketId}</div>
                   </div>
                 </div>
 
                 <div className="space-y-3">
                   <div className="text-center">
-                    <h4 className="font-medium mb-2">Your QR Code</h4>
-                    <div className="w-32 h-32 bg-gradient-secondary mx-auto rounded-lg flex items-center justify-center">
-                      <div className="text-4xl">📱</div>
-                    </div>
+                    <h4 className="font-medium mb-2">Your NFT Ticket</h4>
+                    <Button
+                      variant="hero"
+                      size="lg"
+                      className="w-full text-base font-semibold"
+                      onClick={handleSaveToWallet}
+                    >
+                      <Wallet className="h-5 w-5 mr-2" />
+                      Save NFT Ticket to Wallet
+                    </Button>
                     <p className="text-xs text-muted-foreground mt-2">
-                      Show this QR code at the event entrance
+                      Click to add this NFT to your crypto wallet.
                     </p>
                   </div>
                 </div>
 
                 <div className="flex gap-4">
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     className="flex-1"
                     onClick={() => navigate('/profile')}
                   >
                     View in Profile
                   </Button>
-                  <Button 
+                  <Button
                     className="flex-1 bg-gradient-primary"
                     onClick={() => navigate('/events')}
                   >
@@ -135,38 +186,32 @@ const PurchaseTicket = () => {
   return (
     <div className="min-h-screen bg-gradient-hero">
       <div className="container mx-auto px-4 py-8">
-        {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-            <button onClick={() => navigate(-1)} className="hover:text-primary">
-              Events
-            </button>
+            <button onClick={() => navigate(-1)} className="hover:text-primary">Events</button>
             <span>/</span>
             <span className="text-primary">Purchase Ticket</span>
           </div>
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Event
+              <ArrowLeft className="h-4 w-4 mr-2" /> Back to Event
             </Button>
             <h1 className="text-3xl font-bold">Purchase Tickets</h1>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Event Details */}
           <div className="space-y-6">
             <Card className="bg-glass/80 backdrop-blur-glass border-glass-border">
               <CardHeader>
                 <CardTitle className="text-xl">{event.title}</CardTitle>
                 {event.verified && (
                   <Badge className="w-fit bg-success/90 text-success-foreground">
-                    <Shield className="h-3 w-3 mr-1" />
-                    Verified Event
+                    <Shield className="h-3 w-3 mr-1" /> Verified Event
                   </Badge>
                 )}
               </CardHeader>
-              
+
               <CardContent className="space-y-4">
                 <div className="grid gap-3">
                   <div className="flex items-center">
@@ -204,7 +249,6 @@ const PurchaseTicket = () => {
               </CardContent>
             </Card>
 
-            {/* Trust Indicators */}
             <Card className="bg-glass/80 backdrop-blur-glass border-glass-border">
               <CardContent className="p-4">
                 <h4 className="font-medium mb-3 text-center">Secure Purchase</h4>
@@ -226,58 +270,51 @@ const PurchaseTicket = () => {
             </Card>
           </div>
 
-          {/* Purchase Form */}
           <div className="lg:col-span-2 space-y-6">
             <Card className="bg-glass/80 backdrop-blur-glass border-glass-border">
               <CardHeader>
                 <CardTitle>Complete Your Purchase</CardTitle>
               </CardHeader>
-              
+
               <CardContent className="space-y-6">
-                {/* Quantity Selection */}
                 <div>
-                  <Label className="text-base font-medium">Ticket Quantity</Label>
-                  <div className="flex items-center gap-4 mt-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleQuantityChange(-1)}
-                      disabled={quantity <= 1}
-                    >
-                      <Minus className="h-4 w-4" />
-                    </Button>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        value={quantity}
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value);
-                          if (val >= 1 && val <= Math.min(10, event.available)) {
-                            setQuantity(val);
-                          }
-                        }}
-                        className="w-20 text-center bg-glass/50 border-glass-border"
-                        min={1}
-                        max={Math.min(10, event.available)}
-                      />
-                      <span className="text-sm text-muted-foreground">
-                        (max {Math.min(10, event.available)})
-                      </span>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleQuantityChange(1)}
-                      disabled={quantity >= Math.min(10, event.available)}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
+                  <div className="flex justify-between items-center mb-2">
+                    <Label className="text-base font-medium">Select Your Seat</Label>
+                    <span className="text-sm text-muted-foreground">
+                      Selected: {selectedSeat ? 1 : 0} / 1
+                    </span>
                   </div>
+                  <div className="grid grid-cols-5 md:grid-cols-10 gap-2 overflow-y-auto max-h-[300px] p-2 bg-glass/20 rounded-lg border border-glass-border">
+                    {allSeats.map((seat) => (
+                      <Button
+                        key={seat.number}
+                        variant={
+                          selectedSeat === seat.number
+                            ? "hero"
+                            : seat.isAvailable
+                            ? "glass"
+                            : "secondary"
+                        }
+                        size="sm"
+                        className={`font-semibold transition-transform duration-200 hover:scale-105 ${
+                          !seat.isAvailable && "opacity-50 cursor-not-allowed"
+                        }`}
+                        disabled={!seat.isAvailable && selectedSeat !== seat.number}
+                        onClick={() => handleSeatSelection(seat.number)}
+                      >
+                        {seat.number}
+                      </Button>
+                    ))}
+                  </div>
+                  {selectedSeat && (
+                    <div className="mt-4 text-sm text-center text-muted-foreground">
+                      Selected Seat: <span className="font-medium text-primary">{selectedSeat}</span>
+                    </div>
+                  )}
                 </div>
 
                 <Separator className="bg-glass-border" />
 
-                {/* Price Calculation */}
                 <div className="bg-glass/30 rounded-lg p-4 border border-glass-border">
                   <h4 className="font-medium mb-3">Price Breakdown</h4>
                   <div className="space-y-2 text-sm">
@@ -286,24 +323,21 @@ const PurchaseTicket = () => {
                       <span>{event.price} ETH (${event.fiatPrice})</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Quantity:</span>
+                      <span>Tickets selected:</span>
                       <span>{quantity}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Gas fees (estimated):</span>
-                      <span>~0.003 ETH (~$5)</span>
+                      <span>{quantity > 0 ? "~0.003 ETH (~$5)" : "N/A"}</span>
                     </div>
                     <Separator className="bg-glass-border" />
                     <div className="flex justify-between font-semibold text-base">
                       <span>Total:</span>
-                      <span>{totalPrice.toFixed(3)} ETH (${totalFiatPrice + 5})</span>
+                      <span>{totalPrice.toFixed(3)} ETH (${totalFiatPrice + (quantity > 0 ? 5 : 0)})</span>
                     </div>
                   </div>
                 </div>
 
-                <Separator className="bg-glass-border" />
-
-                {/* Payment Method */}
                 <div>
                   <Label className="text-base font-medium">Payment Method</Label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
@@ -328,7 +362,6 @@ const PurchaseTicket = () => {
                   </div>
                 </div>
 
-                {/* Warning for card payments */}
                 {selectedPayment === "card" && (
                   <div className="flex items-start gap-3 p-3 bg-warning/10 border border-warning/20 rounded-lg">
                     <AlertCircle className="h-5 w-5 text-warning mt-0.5" />
@@ -341,15 +374,22 @@ const PurchaseTicket = () => {
                   </div>
                 )}
 
-                {/* Purchase Button */}
+                {/* Error Display */}
+                {error && (
+                  <div className="flex items-center justify-center gap-3 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm font-medium">
+                    <AlertCircle className="h-5 w-5" />
+                    <span>{error}</span>
+                  </div>
+                )}
+                
                 <Button
                   variant="hero"
                   size="lg"
                   className="w-full text-base font-semibold"
                   onClick={handlePurchase}
-                  disabled={isProcessing}
+                  disabled={loading || !selectedSeat}
                 >
-                  {isProcessing ? (
+                  {loading ? (
                     <>
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
                       Processing Payment...
@@ -361,7 +401,7 @@ const PurchaseTicket = () => {
                       ) : (
                         <CreditCard className="h-4 w-4 mr-2" />
                       )}
-                      Purchase {quantity} NFT Ticket{quantity > 1 ? 's' : ''} • {totalPrice.toFixed(3)} ETH
+                      Purchase NFT Ticket • {totalPrice.toFixed(3)} ETH
                     </>
                   )}
                 </Button>
