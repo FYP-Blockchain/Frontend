@@ -1,4 +1,6 @@
 import { Link } from "react-router-dom";
+import { useAppSelector } from "@/app/hooks";
+import { RootState } from "@/app/store";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +20,10 @@ import {
 
 const Home = () => {
   useSmoothScrollToTop();
+  const { currentUser } = useAppSelector((state: RootState) => state.auth);
+  const isOrganizer = currentUser?.roles?.includes('ROLE_ORGANIZER');
+  const isNormalUser = currentUser?.roles?.includes('ROLE_USER');
+
   const features = [
     {
       icon: Shield,
@@ -76,7 +82,7 @@ const Home = () => {
             Blockchain-Secured Ticketing
           </Badge>
           
-          <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">
+          <h1 className="text-4xl sm:text-5xl md:text-7xl font-bold mb-6 leading-tight">
             <span className="bg-gradient-primary bg-clip-text text-transparent">
               Revolutionizing
             </span>
@@ -88,27 +94,33 @@ const Home = () => {
             </span>
           </h1>
           
-          <p className="text-xl md:text-2xl text-muted-foreground mb-8 max-w-3xl mx-auto leading-relaxed">
+          <p className="text-lg md:text-xl text-muted-foreground mb-8 max-w-3xl mx-auto leading-relaxed">
             Secure, transparent, and fraud-proof event tickets powered by NFT technology. 
             Experience the future of event access today.
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
+            
+            {!isOrganizer && (
             <Link to="/events">
-              <Button variant="hero" size="lg" className="text-lg px-8 py-6">
+              <Button variant="hero" size="lg" className="text-lg px-8 py-6 w-full sm:w-auto">
                 Browse Events
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
             </Link>
-            <Link to="/create-event">
-              <Button variant="glass" size="lg" className="text-lg px-8 py-6">
-                Create Event
-              </Button>
-            </Link>
+            )}
+            {/* Conditional "Create Event" Button */}
+            {isOrganizer && (
+              <Link to="/create-event">
+                <Button variant="glass" size="lg" className="text-lg px-8 py-6 w-full sm:w-auto">
+                  Create Event
+                </Button>
+              </Link>
+            )}
           </div>
 
           {/* Trust Indicators */}
-          <div className="flex flex-wrap justify-center gap-6 text-sm text-muted-foreground">
+          <div className="flex flex-wrap justify-center gap-4 sm:gap-6 text-sm text-muted-foreground">
             <div className="flex items-center">
               <Shield className="h-4 w-4 mr-2 text-success" />
               <span>Ethereum Verified</span>
@@ -126,18 +138,18 @@ const Home = () => {
       </section>
 
       {/* Features Section */}
-      <section className="py-20 bg-background">
+      <section className="py-16 sm:py-20 bg-background">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold mb-4">
+          <div className="text-center mb-12 sm:mb-16">
+            <h2 className="text-3xl sm:text-4xl font-bold mb-4">
               Why Choose <span className="bg-gradient-primary bg-clip-text text-transparent">NFTickets</span>?
             </h2>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+            <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto">
               Experience the next generation of event ticketing with cutting-edge blockchain technology
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
             {features.map((feature, index) => (
               <Card key={index} className="bg-glass/50 backdrop-blur-glass border-glass-border hover:shadow-glass transition-all duration-300 group">
                 <CardHeader className="text-center">
@@ -160,7 +172,7 @@ const Home = () => {
                 <div className="flex justify-center mb-2">
                   <stat.icon className="h-8 w-8 text-primary" />
                 </div>
-                <div className="text-3xl font-bold text-primary mb-1">{stat.value}</div>
+                <div className="text-2xl sm:text-3xl font-bold text-primary mb-1">{stat.value}</div>
                 <div className="text-sm text-muted-foreground">{stat.label}</div>
               </div>
             ))}
@@ -169,14 +181,14 @@ const Home = () => {
       </section>
 
       {/* Benefits Section */}
-      <section className="py-20 bg-gradient-secondary">
+      <section className="py-16 sm:py-20 bg-gradient-secondary">
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
-              <h2 className="text-4xl font-bold mb-6">
+              <h2 className="text-3xl sm:text-4xl font-bold mb-6">
                 Built on <span className="bg-gradient-primary bg-clip-text text-transparent">Enterprise-Grade</span> Technology
               </h2>
-              <p className="text-xl text-muted-foreground mb-8">
+              <p className="text-lg sm:text-xl text-muted-foreground mb-8">
                 Our platform combines the security of blockchain with the convenience of traditional payments, 
                 giving you the best of both worlds.
               </p>
@@ -191,7 +203,7 @@ const Home = () => {
               <div className="mt-8">
                 <Link to="/about">
                   <Button variant="hero" size="lg">
-                    Learn more about our technology → NFT Tickets
+                    Learn more about our technology
                   </Button>
                 </Link>
               </div>
@@ -200,7 +212,7 @@ const Home = () => {
               <Card className="bg-glass/80 backdrop-blur-glass border-glass-border shadow-glass">
                 <CardContent className="p-8">
                   <div className="text-center">
-                    <div className="text-6xl mb-4">🔗</div>
+                    <div className="text-5xl sm:text-6xl mb-4">🔗</div>
                     <h3 className="text-2xl font-bold mb-4">Blockchain Integration</h3>
                     <p className="text-muted-foreground mb-6">
                       Every ticket is minted as an NFT and stored on the blockchain, 
@@ -218,26 +230,30 @@ const Home = () => {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 bg-gradient-hero">
+      <section className="py-16 sm:py-20 bg-gradient-hero">
         <div className="container mx-auto px-4 text-center">
-          <h2 className="text-4xl font-bold mb-4">
+          <h2 className="text-3xl sm:text-4xl font-bold mb-4">
             Ready to Experience the Future?
           </h2>
-          <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
+          <p className="text-lg sm:text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
             Join thousands of event organizers and attendees who trust NFTickets 
             for secure, transparent ticketing.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/events">
-              <Button variant="hero" size="lg" className="text-lg px-8 py-6">
-                Start Exploring Events
-              </Button>
-            </Link>
-            <Link to="/create-event">
-              <Button variant="accent" size="lg" className="text-lg px-8 py-6">
-                Create Your First Event
-              </Button>
-            </Link>
+            {!isOrganizer && (
+              <Link to="/events">
+                <Button variant="hero" size="lg" className="text-lg px-8 py-6 w-full sm:w-auto">
+                  Start Exploring Events
+                </Button>
+              </Link>
+            )}
+            {isOrganizer && (
+              <Link to="/create-event">
+                <Button variant="accent" size="lg" className="text-lg px-8 py-6 w-full sm:w-auto">
+                  Create Your First Event
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
       </section>

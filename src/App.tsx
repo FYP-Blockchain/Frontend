@@ -8,7 +8,6 @@ import Footer from "./components/Footer";
 import Home from "./pages/Home";
 import Events from "./pages/Events";
 import EventDetails from "./pages/EventDetails";
-import CreateEvent from "./pages/CreateEvent";
 import SignIn from "./pages/SignIn";
 import SignUp from "./pages/SignUp";
 import About from "./pages/About";
@@ -17,6 +16,9 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsConditions from "./pages/TermsConditions";
 import PurchaseTicket from "./pages/PurchaseTicket";
 import { UserProtectedRoute, OrganizerProtectedRoute } from './components/auth/ProtectedRoute';
+import MyEvents from "./pages/MyEvents";
+import CreateEvent from "./pages/CreateEvent";
+import EditEvent from "./pages/EditEvent";
 
 const queryClient = new QueryClient();
 
@@ -47,7 +49,11 @@ const App = () => (
                 </div>
               </div>
             } />
-
+            <Route element={<OrganizerProtectedRoute />}>
+              <Route path="/my-events" element={<MyEvents />} />
+              <Route path="/create-event" element={<CreateEvent />} />
+              <Route path="/edit-event/:id" element={<EditEvent />} />
+            </Route>
             <Route element={<UserProtectedRoute />}>
               <Route path="/my-tickets" element={
                 <div className="min-h-screen bg-gradient-hero flex items-center justify-center">
@@ -57,10 +63,6 @@ const App = () => (
                   </div>
                 </div>
               } />
-            </Route>
-
-            <Route element={<OrganizerProtectedRoute />}>
-              <Route path="/create-event" element={<CreateEvent />} />
             </Route>
 
             <Route path="*" element={<NotFound />} />

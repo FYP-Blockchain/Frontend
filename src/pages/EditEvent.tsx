@@ -1,13 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
-import { createEvent, clearLastCreatedEvent } from "@/features/events/eventSlice";
+import { fetchEventById, updateEvent, clearLastUpdatedEvent } from "@/features/events/eventSlice";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarIcon, Tag, Loader2 } from "lucide-react";
+import { CalendarIcon, Tag, Loader2, Edit } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,41 +30,48 @@ const eventSchema = z.object({
   description: z.string().min(10, "Description is required"),
   eventStartTime: z.string().min(1, "Start time is required"),
   eventEndTime: z.string().min(1, "End time is required"),
-  imageFile: z.instanceof(FileList).refine(files => files?.length === 1, "Event image is required."),
+  imageFile: z.instanceof(FileList).optional(),
   category: z.string().min(1, "Category is required"),
   location: z.string().min(3, "Location is required"),
 });
 
 type EventFormData = z.infer<typeof eventSchema>;
 
-const CreateEvent = () => {
+const EditEvent = () => {
   useSmoothScrollToTop();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const { loading, error, lastCreatedEvent } = useAppSelector((state) => state.events);
-  const [isCompressing, setIsCompressing] = useState(false);
+  const { currentItem: event, loading, error, lastUpdatedEvent } = useAppSelector((state) => state.events);
 
   const form = useForm<EventFormData>({
     resolver: zodResolver(eventSchema),
-    defaultValues: {
-      name: "",
-      totalSupply: 100,
-      priceInEther: 0.1,
-      description: "",
-      eventStartTime: "20:00",
-      eventEndTime: "23:00",
-      category: "",
-      location: "",
-    },
   });
 
-  const onSubmit = async (data: EventFormData) => {
-    setIsCompressing(true);
-    const eventDateUTC = data.eventDate.toISOString().split('T')[0];
+  useEffect(() => {
+    if (id) {
+      dispatch(fetchEventById(id));
+    }
+  }, [id, dispatch]);
 
-    const originalImageFile = data.imageFile[0];
-    const compressedImageFile = await compressImage(originalImageFile);
-    setIsCompressing(false);
+  useEffect(() => {
+    if (event) {
+      form.reset({
+        name: event.name,
+        eventDate: new Date(event.eventDate),
+        totalSupply: event.totalSupply,
+        priceInEther: Number(event.priceInWei) / 1e18,
+        description: event.description,
+        eventStartTime: format(new Date(event.eventStartTime), "HH:mm"),
+        eventEndTime: format(new Date(event.eventEndTime), "HH:mm"),
+        category: event.category,
+        location: event.location,
+      });
+    }
+  }, [event, form]);
+
+  const onSubmit = async (data: EventFormData) => {
+    const eventDateUTC = data.eventDate.toISOString().split('T')[0];
 
     const formData = new FormData();
     formData.append('name', data.name);
@@ -74,64 +81,61 @@ const CreateEvent = () => {
     formData.append('description', data.description);
     formData.append('eventStartTime', `${eventDateUTC}T${data.eventStartTime}:00Z`);
     formData.append('eventEndTime', `${eventDateUTC}T${data.eventEndTime}:00Z`);
-    
-    // THE FIX: Add the original filename as the third argument
-    formData.append('imageFile', compressedImageFile, originalImageFile.name);
-    
     formData.append('category', data.category);
     formData.append('location', data.location);
     
-    dispatch(createEvent(formData));
+    if (data.imageFile && data.imageFile.length > 0) {
+      const compressedImageFile = await compressImage(data.imageFile[0]);
+      formData.append('imageFile', compressedImageFile, data.imageFile[0].name);
+    }
+    
+    dispatch(updateEvent({ eventId: id, formData }));
   };
   
   useEffect(() => {
-    if (lastCreatedEvent) {
-      form.reset();
-    }
     if (error) {
-      toast.error("Event Creation Failed", {
-        description: error || "There was an issue creating your event.",
-      });
+      toast.error("Failed to Update Event", { description: error });
     }
-  }, [lastCreatedEvent, error, form]);
+  }, [error]);
 
   const handleCloseSuccessDialog = () => {
-    dispatch(clearLastCreatedEvent());
+    dispatch(clearLastUpdatedEvent());
+    navigate('/my-events'); // Navigate back after closing the dialog
   };
 
   const categories = ["Music", "Conference", "Workshop", "Art", "Sports", "Festival", "Other"];
 
   return (
     <>
-      <LoadingOverlay 
-        isLoading={loading || isCompressing} 
-        text={isCompressing ? "Compressing Image..." : "Creating Your Event on the Blockchain..."} 
-      />
+      <LoadingOverlay isLoading={loading} text={form.formState.isSubmitting ? "Saving Changes..." : "Loading Event Details..."} />
       <SuccessDialog 
-        isOpen={!!lastCreatedEvent}
-        onClose={handleCloseSuccessDialog}
-        event={lastCreatedEvent} variant={"created"}      />
+        isOpen={!!lastUpdatedEvent} 
+        onClose={handleCloseSuccessDialog} 
+        event={lastUpdatedEvent} 
+        variant="updated"
+      />
       <div className="min-h-screen bg-gradient-hero py-8">
         <div className="container mx-auto px-4 max-w-4xl">
           <div className="mb-8 text-center">
             <h1 className="text-4xl font-bold bg-gradient-primary bg-clip-text text-transparent mb-4">
-              Create Your Event
+              Edit Event
             </h1>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Fill in the details below to mint your event on the blockchain and start selling NFT tickets.
+              Update the details for your event. Changes will be reflected on the blockchain.
             </p>
           </div>
 
           <Card className="bg-glass/80 backdrop-blur-glass border-glass-border shadow-glass">
             <CardHeader>
               <CardTitle className="text-2xl flex items-center">
-                <Tag className="h-6 w-6 mr-3 text-primary" />
-                Event Information
+                <Edit className="h-6 w-6 mr-3 text-primary" />
+                Editing: {event?.name || "..."}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+                  
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <FormField control={form.control} name="name" render={({ field }) => (
                       <FormItem>
@@ -143,7 +147,7 @@ const CreateEvent = () => {
                     <FormField control={form.control} name="category" render={({ field }) => (
                       <FormItem>
                         <FormLabel>Category</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
                             <SelectTrigger className="bg-glass/30 border-glass-border"><SelectValue placeholder="Select a category" /></SelectTrigger>
                           </FormControl>
@@ -227,7 +231,13 @@ const CreateEvent = () => {
                   
                   <FormField control={form.control} name="imageFile" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Event Image / Flyer</FormLabel>
+                      <FormLabel>New Event Image (Optional)</FormLabel>
+                      {event?.imageUrl && (
+                        <div className="mt-2">
+                          <p className="text-sm text-muted-foreground mb-2">Current Image:</p>
+                          <img src={event.imageUrl} alt="Current event" className="w-32 h-32 object-cover rounded-md border border-glass-border" />
+                        </div>
+                      )}
                       <FormControl>
                         <Input type="file" accept="image/png, image/jpeg, image/gif" className="bg-glass/30 border-glass-border file:text-primary file:font-semibold" {...form.register("imageFile")} />
                       </FormControl>
@@ -236,14 +246,14 @@ const CreateEvent = () => {
                   )} />
 
                   <div className="pt-6">
-                    <Button type="submit" variant="hero" size="lg" className="w-full text-lg" disabled={loading || isCompressing}>
-                      {loading || isCompressing ? (
+                    <Button type="submit" variant="hero" size="lg" className="w-full text-lg" disabled={loading}>
+                      {loading ? (
                         <>
                           <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                          {isCompressing ? "Compressing Image..." : "Submitting to Blockchain..."}
+                          Saving Changes...
                         </>
                       ) : (
-                        "Create Event"
+                        "Save Changes"
                       )}
                     </Button>
                   </div>
@@ -257,4 +267,4 @@ const CreateEvent = () => {
   );
 };
 
-export default CreateEvent;
+export default EditEvent;

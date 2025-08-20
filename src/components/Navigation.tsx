@@ -26,7 +26,6 @@ const Navigation = () => {
   const dispatch = useAppDispatch();
   const { currentUser } = useAppSelector((state: RootState) => state.auth);
 
-  // Determine user roles for conditional rendering
   const isOrganizer = currentUser?.roles?.includes('ROLE_ORGANIZER');
   const isUser = currentUser?.roles?.includes('ROLE_USER');
 
@@ -56,12 +55,13 @@ const Navigation = () => {
     }
   };
 
-  // Dynamically build the navigation items based on user role
   const navItems = [
     { href: "/", label: "Home" },
-    { href: "/events", label: "Events" },
+    // Only show "Events" if the user is NOT an organizer
+    ...(!isOrganizer ? [{ href: "/events", label: "Events" }] : []),
     ...(isUser ? [{ href: "/my-tickets", label: "My Tickets" }] : []),
     ...(isOrganizer ? [{ href: "/create-event", label: "Create Event" }] : []),
+    ...(isOrganizer ? [{ href: "/my-events", label: "My Events" }] : []),
     { href: "/about", label: "About" },
   ];
   
