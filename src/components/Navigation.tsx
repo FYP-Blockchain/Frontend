@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { logout } from "@/features/auth/authSlice";
+import { setWalletAddress, clearWalletAddress } from "@/features/wallet/walletReducer";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,8 @@ declare global {
   interface Window {
     ethereum?: {
       request: (args: { method: string }) => Promise<any>;
+      on: (event: string, callback: (...args: any[]) => void) => void;
+      removeListener: (event: string, callback: (...args: any[]) => void) => void;
     };
   }
 }
@@ -25,12 +28,42 @@ const Navigation = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const { currentUser } = useAppSelector((state: RootState) => state.auth);
+  const walletAddress = useAppSelector((state: RootState) => state.wallet.address)
 
   const isOrganizer = currentUser?.roles?.includes('ROLE_ORGANIZER');
   const isUser = currentUser?.roles?.includes('ROLE_USER');
 
+  useEffect(() => {
+    if (window.ethereum) {
+      window.ethereum.request({ method: "eth_accounts" }).then((accounts) => {
+        if (accounts.length > 0) {
+          dispatch(setWalletAddress(accounts[0]));
+        }
+      });
+  
+      const handleAccountsChanged = (accounts: string[]) => {
+        if (accounts.length > 0) {
+          dispatch(setWalletAddress(accounts[0]));
+          toast.dismiss();
+          toast.info(`Wallet switched: ${accounts[0].substring(0, 6)}...${accounts[0].slice(-4)}`);
+        } else {
+          dispatch(clearWalletAddress());
+          toast.dismiss();
+          toast.info("Wallet disconnected.");
+        }
+      };
+  
+      window.ethereum.on("accountsChanged", handleAccountsChanged);
+  
+      return () => {
+        window.ethereum?.removeListener("accountsChanged", handleAccountsChanged);
+      };
+    }
+  }, [dispatch]);
+
   const handleLogout = () => {
     dispatch(logout());
+    dispatch(clearWalletAddress());
     toast.success("You have been logged out.");
     navigate("/");
   };
@@ -38,7 +71,8 @@ const Navigation = () => {
   const connectWallet = async () => {
     if (window.ethereum) {
       try {
-        await window.ethereum.request({ method: 'eth_requestAccounts' });
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        dispatch(setWalletAddress(accounts[0]));
         toast.success("Wallet connected successfully!");
       } catch (err) {
         console.error(err);
@@ -100,10 +134,17 @@ const Navigation = () => {
 
           {/* Desktop Actions */}
           <div className="hidden md:flex items-center space-x-4">
-            <Button onClick={connectWallet} variant="outline" size="sm" className="border-accent bg-accent/10 text-accent hover:bg-accent hover:text-accent-foreground">
-              <Wallet className="h-4 w-4 mr-2" />
-              Connect Wallet
-            </Button>
+            {!walletAddress ? (
+              <Button onClick={connectWallet} variant="outline" size="sm" className="border-accent bg-accent/10 text-accent hover:bg-accent hover:text-accent-foreground">
+                <Wallet className="h-4 w-4 mr-2" />
+                Connect Wallet
+              </Button>
+            ) : (
+              <Badge variant="secondary" className="px-3 py-1">
+                {walletAddress.substring(0,6)}...{walletAddress.slice(-4)}
+              </Badge>
+            )}
+            
             
             {currentUser ? (
               <DropdownMenu>
