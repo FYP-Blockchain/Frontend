@@ -1,13 +1,15 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements } from "@stripe/react-stripe-js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import useSmoothScrollToTop from "@/hooks/useSmoothScrollToTop";
+import StripePaymentForm from "@/components/payment/StripePaymentForm";
 import {
   Calendar,
   MapPin,
@@ -22,6 +24,9 @@ import {
   QrCode
 } from "lucide-react";
 import { createTicket, resetTicketState } from "@/features/ticket/ticketSlice";
+import { resetPaymentState } from "@/features/payment/paymentSlice";
+
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_your_stripe_publishable_key');
 
 // Function to generate 50 seats with A1, B1 format
 const generateSeats = () => {
@@ -56,6 +61,10 @@ const PurchaseTicket = () => {
     (state) => state.ticket
   );
 
+  const { paymentIntentId, isPaymentSuccessful } = useSelector(
+    (state) => state.payment
+  );
+
   const [selectedSeat, setSelectedSeat] = useState(null);
   const [selectedPayment, setSelectedPayment] = useState("crypto");
 
@@ -86,6 +95,14 @@ const PurchaseTicket = () => {
     }
   };
 
+  const handlePaymentMethodChange = (method: string) => {
+    setSelectedPayment(method);
+    if (error) {
+      dispatch(resetTicketState());
+    }
+    dispatch(resetPaymentState());
+  };
+
   const handlePurchase = () => {
     // Clear any previous error before attempting a new purchase
     if (error) {
@@ -98,6 +115,19 @@ const PurchaseTicket = () => {
       initialOwner:
         localStorage.getItem("userWallet") ||
         "0x2546BcD3c84621e976D8185a91A922aE77ECEc30",
+      ...(paymentIntentId && { paymentIntentId }), // payment intent Id for stripe payments (card)
+    };
+    dispatch(createTicket(payload));
+  };
+
+  const handleStripePaymentSuccess = (paymentId) => {
+    const payload = {
+      publicEventId: event.id,
+      seat: selectedSeat,
+      initialOwner:
+        localStorage.getItem("userWallet") ||
+        "0x2546BcD3c84621e976D8185a91A922aE77ECEc30",
+      paymentIntentId: paymentId,
     };
     dispatch(createTicket(payload));
   };
@@ -105,6 +135,7 @@ const PurchaseTicket = () => {
   useEffect(() => {
     return () => {
       dispatch(resetTicketState());
+      dispatch(resetPaymentState());
     };
   }, [dispatch]);
 
@@ -221,7 +252,7 @@ const PurchaseTicket = () => {
                       <div className="text-xs text-muted-foreground">{event.time}</div>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center">
                     <MapPin className="h-4 w-4 text-primary mr-3" />
                     <div>
@@ -229,7 +260,7 @@ const PurchaseTicket = () => {
                       <div className="text-xs text-muted-foreground">{event.fullAddress}</div>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center">
                     <Users className="h-4 w-4 text-primary mr-3" />
                     <div>
@@ -237,7 +268,7 @@ const PurchaseTicket = () => {
                       <div className="text-xs text-muted-foreground">of {event.total} total tickets</div>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center">
                     <Clock className="h-4 w-4 text-primary mr-3" />
                     <div>
@@ -292,13 +323,12 @@ const PurchaseTicket = () => {
                           selectedSeat === seat.number
                             ? "hero"
                             : seat.isAvailable
-                            ? "glass"
-                            : "secondary"
+                              ? "glass"
+                              : "secondary"
                         }
                         size="sm"
-                        className={`font-semibold transition-transform duration-200 hover:scale-105 ${
-                          !seat.isAvailable && "opacity-50 cursor-not-allowed"
-                        }`}
+                        className={`font-semibold transition-transform duration-200 hover:scale-105 ${!seat.isAvailable && "opacity-50 cursor-not-allowed"
+                          }`}
                         disabled={!seat.isAvailable && selectedSeat !== seat.number}
                         onClick={() => handleSeatSelection(seat.number)}
                       >
@@ -344,7 +374,7 @@ const PurchaseTicket = () => {
                     <Button
                       variant={selectedPayment === "crypto" ? "hero" : "glass"}
                       className="h-16 flex-col justify-center"
-                      onClick={() => setSelectedPayment("crypto")}
+                      onClick={() => handlePaymentMethodChange("crypto")}
                     >
                       <Wallet className="h-5 w-5 mb-1" />
                       <span className="text-sm">Pay with Crypto</span>
@@ -353,7 +383,7 @@ const PurchaseTicket = () => {
                     <Button
                       variant={selectedPayment === "card" ? "hero" : "glass"}
                       className="h-16 flex-col justify-center"
-                      onClick={() => setSelectedPayment("card")}
+                      onClick={() => handlePaymentMethodChange("card")}
                     >
                       <CreditCard className="h-5 w-5 mb-1" />
                       <span className="text-sm">Pay with Card</span>
@@ -381,30 +411,36 @@ const PurchaseTicket = () => {
                     <span>{error}</span>
                   </div>
                 )}
-                
-                <Button
-                  variant="hero"
-                  size="lg"
-                  className="w-full text-base font-semibold"
-                  onClick={handlePurchase}
-                  disabled={loading || !selectedSeat}
-                >
-                  {loading ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                      Processing Payment...
-                    </>
-                  ) : (
-                    <>
-                      {selectedPayment === "crypto" ? (
+
+                {selectedPayment === "card" ? (
+                  <Elements stripe={stripePromise}>
+                    <StripePaymentForm
+                      onPaymentSuccess={handleStripePaymentSuccess}
+                      eventId={event.id}
+                      disabled={!selectedSeat}
+                    />
+                  </Elements>
+                ) : (
+                  <Button
+                    variant="hero"
+                    size="lg"
+                    className="w-full text-base font-semibold"
+                    onClick={handlePurchase}
+                    disabled={loading || !selectedSeat}
+                  >
+                    {loading ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                        Processing Payment...
+                      </>
+                    ) : (
+                      <>
                         <Wallet className="h-4 w-4 mr-2" />
-                      ) : (
-                        <CreditCard className="h-4 w-4 mr-2" />
-                      )}
-                      Purchase NFT Ticket • {totalPrice.toFixed(3)} ETH
-                    </>
-                  )}
-                </Button>
+                        Purchase NFT Ticket • {totalPrice.toFixed(3)} ETH
+                      </>
+                    )}
+                  </Button>
+                )}
 
                 <div className="text-center text-xs text-muted-foreground">
                   <p>By purchasing, you agree to our Terms of Service and Privacy Policy.</p>
