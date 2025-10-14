@@ -52,15 +52,15 @@ const StripePaymentForm: React.FC<StripePaymentFormProps> = ({
           if (paymentStatus === 'succeeded' && paymentIntentId && !paymentProcessedRef.current) {
                paymentProcessedRef.current = true;
                onPaymentSuccess(paymentIntentId);
-               dispatch(resetPaymentState());
+               // Don't reset payment state here - let parent handle it
           }
-     }, [paymentStatus, paymentIntentId, onPaymentSuccess, dispatch]);
+     }, [paymentStatus, paymentIntentId, onPaymentSuccess]);
 
-     // Reset the processed flag when component mounts or payment method changes
+     // Reset the processed flag when component mounts
      useEffect(() => {
           paymentProcessedRef.current = false;
-          dispatch(resetPaymentState());
-     }, [dispatch]);
+          // Only reset on initial mount, not on every render
+     }, []);
 
      const handleSubmit = async (event: React.FormEvent) => {
           event.preventDefault();
