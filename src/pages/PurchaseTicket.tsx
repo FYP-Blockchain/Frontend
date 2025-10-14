@@ -97,10 +97,14 @@ const PurchaseTicket = () => {
 
   const handlePaymentMethodChange = (method: string) => {
     setSelectedPayment(method);
+    // Only reset states if there was an error or if switching TO card payment
     if (error) {
       dispatch(resetTicketState());
     }
-    dispatch(resetPaymentState());
+    // Only reset payment state when switching to card payment to avoid redundant calls
+    if (method === "card") {
+      dispatch(resetPaymentState());
+    }
   };
 
   const handlePurchase = () => {
@@ -121,6 +125,7 @@ const PurchaseTicket = () => {
   };
 
   const handleStripePaymentSuccess = (paymentId) => {
+    // Create the ticket with payment proof
     const payload = {
       publicEventId: event.id,
       seat: selectedSeat,
@@ -130,9 +135,15 @@ const PurchaseTicket = () => {
       paymentIntentId: paymentId,
     };
     dispatch(createTicket(payload));
+
+    // Reset payment state after successful ticket creation
+    setTimeout(() => {
+      dispatch(resetPaymentState());
+    }, 1000); // Small delay to allow success screen to show
   };
 
   useEffect(() => {
+    // Cleanup function only runs when component unmounts
     return () => {
       dispatch(resetTicketState());
       dispatch(resetPaymentState());
