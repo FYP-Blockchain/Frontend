@@ -1,0 +1,31 @@
+[
+  {
+    "inputs": [
+      { "internalType": "string", "name": "_name", "type": "string" },
+      { "internalType": "uint256", "name": "_eventDate", "type": "uint256" },
+      { "internalType": "uint256", "name": "_totalSupply", "type": "uint256" },
+      { "internalType": "uint256", "name": "_ticketPrice", "type": "uint256" },
+      { "internalType": "string", "name": "_metadataURI", "type": "string" }
+    ],
+    "name": "createEvent",
+    "outputs": [
+      { "internalType": "uint256", "name": "eventId", "type": "uint256" }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint256", "name": "eventId", "type": "uint256" },
+      { "indexed": false, "internalType": "string", "name": "name", "type": "string" },
+      { "indexed": true, "internalType": "address", "name": "organizer", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "eventDate", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "totalSupply", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "ticketPrice", "type": "uint256" },
+      { "indexed": false, "internalType": "string", "name": "metadataURI", "type": "string" }
+    ],
+    "name": "EventCreated",
+    "type": "event"
+  }
+]

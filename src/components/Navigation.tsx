@@ -3,6 +3,15 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { logout } from "@/features/auth/authSlice";
 import { setWalletAddress, clearWalletAddress } from "@/features/wallet/walletReducer";
+import {
+  requestConnectedAccount,
+  fetchExistingAccount,
+  subscribeAccountChanges,
+  unsubscribeAccountChanges,
+  disconnectWalletSession,
+  isMetaMaskAvailable,
+  ensureTargetNetwork,
+} from "@/services/walletService";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -15,9 +24,9 @@ import { RootState } from "@/app/store";
 declare global {
   interface Window {
     ethereum?: {
-      request: (args: { method: string }) => Promise<any>;
-      on: (event: string, callback: (...args: any[]) => void) => void;
-      removeListener: (event: string, callback: (...args: any[]) => void) => void;
+      request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+      on: (event: string, callback: (...args: unknown[]) => void) => void;
+      removeListener: (event: string, callback: (...args: unknown[]) => void) => void;
     };
   }
 }
@@ -34,51 +43,43 @@ const Navigation = () => {
   const isUser = currentUser?.roles?.includes('ROLE_USER');
 
   useEffect(() => {
-    if (window.ethereum) {
-      window.ethereum.request({ method: "eth_accounts" }).then((accounts) => {
-        if (accounts.length > 0) {
-          dispatch(setWalletAddress(accounts[0]));
-        }
-      });
-  
-      const handleAccountsChanged = (accounts: string[]) => {
-        if (accounts.length > 0) {
-          dispatch(setWalletAddress(accounts[0]));
-          toast.dismiss();
-          toast.info(`Wallet switched: ${accounts[0].substring(0, 6)}...${accounts[0].slice(-4)}`);
-        } else {
-          dispatch(clearWalletAddress());
-          toast.dismiss();
-          toast.info("Wallet disconnected.");
-        }
-      };
-  
-      window.ethereum.on("accountsChanged", handleAccountsChanged);
-  
-      return () => {
-        window.ethereum?.removeListener("accountsChanged", handleAccountsChanged);
-      };
-    }
+    let isMounted = true;
+    fetchExistingAccount().then((account) => {
+      if (account && isMounted) {
+        dispatch(setWalletAddress(account));
+      }
+    });
+
+    const handleAccountsChanged = (accounts: string[]) => {
+      if (accounts.length > 0) {
+        dispatch(setWalletAddress(accounts[0]));
+        toast.dismiss();
+        toast.info(`Wallet switched: ${accounts[0].substring(0, 6)}...${accounts[0].slice(-4)}`);
+      } else {
+        dispatch(clearWalletAddress());
+        toast.dismiss();
+        toast.info("Wallet disconnected.");
+      }
+    };
+
+    subscribeAccountChanges(handleAccountsChanged);
+
+    return () => {
+      isMounted = false;
+      unsubscribeAccountChanges(handleAccountsChanged);
+    };
   }, [dispatch]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     dispatch(logout());
     dispatch(clearWalletAddress());
+    await disconnectWalletSession();
     toast.success("You have been logged out.");
     navigate("/");
   };
   
   const connectWallet = async () => {
-    if (window.ethereum) {
-      try {
-        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-        dispatch(setWalletAddress(accounts[0]));
-        toast.success("Wallet connected successfully!");
-      } catch (err) {
-        console.error(err);
-        toast.error("Failed to connect wallet.");
-      }
-    } else {
+    if (!isMetaMaskAvailable()) {
       toast.info("MetaMask not found.", {
         description: "Please install the MetaMask browser extension.",
         action: {
@@ -86,7 +87,24 @@ const Navigation = () => {
           onClick: () => window.open("https://metamask.io/", "_blank"),
         },
       });
+      return;
     }
+
+    try {
+      const account = await requestConnectedAccount();
+      await ensureTargetNetwork();
+      dispatch(setWalletAddress(account));
+      toast.success("Wallet connected successfully!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to connect wallet.");
+    }
+  };
+
+  const handleDisconnectWallet = async () => {
+    await disconnectWalletSession();
+    dispatch(clearWalletAddress());
+    toast.info("Wallet disconnected.");
   };
 
   const navItems = [
@@ -134,15 +152,20 @@ const Navigation = () => {
 
           {/* Desktop Actions */}
           <div className="hidden md:flex items-center space-x-4">
-            {!walletAddress ? (
+            {walletAddress ? (
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="px-3 py-1">
+                  {walletAddress.substring(0,6)}...{walletAddress.slice(-4)}
+                </Badge>
+                <Button onClick={handleDisconnectWallet} variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive">
+                  Disconnect
+                </Button>
+              </div>
+            ) : (
               <Button onClick={connectWallet} variant="outline" size="sm" className="border-accent bg-accent/10 text-accent hover:bg-accent hover:text-accent-foreground">
                 <Wallet className="h-4 w-4 mr-2" />
                 Connect Wallet
               </Button>
-            ) : (
-              <Badge variant="secondary" className="px-3 py-1">
-                {walletAddress.substring(0,6)}...{walletAddress.slice(-4)}
-              </Badge>
             )}
             
             
@@ -222,10 +245,16 @@ const Navigation = () => {
                         </Button>
                       </Link>
                     )}
-                     <Button onClick={connectWallet} variant="outline" className="w-full border-accent bg-accent/10 text-accent hover:bg-accent hover:text-accent-foreground">
-                      <Wallet className="h-4 w-4 mr-2" />
-                      Connect Wallet
-                    </Button>
+                    {walletAddress ? (
+                      <Button onClick={handleDisconnectWallet} variant="outline" className="w-full border-destructive/50 text-destructive hover:bg-destructive/10">
+                        Disconnect Wallet
+                      </Button>
+                    ) : (
+                      <Button onClick={connectWallet} variant="outline" className="w-full border-accent bg-accent/10 text-accent hover:bg-accent hover:text-accent-foreground">
+                        <Wallet className="h-4 w-4 mr-2" />
+                        Connect Wallet
+                      </Button>
+                    )}
                   </div>
                 </div>
               </SheetContent>

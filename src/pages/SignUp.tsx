@@ -68,8 +68,17 @@ const SignUp = () => {
       navigate('/signin');
     }
     if (error) {
+      let description = "Unable to create account. Please try again.";
+      if (typeof error === 'object' && error !== null) {
+        const messages = Object.values(error).filter(val => typeof val === 'string');
+        if (messages.length > 0) {
+          description = messages.join(', ');
+        }
+      } else if (typeof error === 'string') {
+        description = error;
+      }
       toast.error("Registration Failed", {
-        description: error || "Unable to create account. Please try again.",
+        description,
       });
     }
   }, [successMessage, error, navigate]);
