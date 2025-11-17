@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useDispatch, useSelector } from "react-redux";
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements } from "@stripe/react-stripe-js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import useSmoothScrollToTop from "@/hooks/useSmoothScrollToTop";
+import StripePaymentForm from "@/components/payment/StripePaymentForm";
 import {
   Calendar,
   MapPin,
@@ -22,6 +23,15 @@ import {
   QrCode
 } from "lucide-react";
 import { createTicket, resetTicketState } from "@/features/ticket/ticketSlice";
+import { resetPaymentState } from "@/features/payment/paymentSlice";
+import { useAppDispatch, useAppSelector } from "@/app/hooks";
+import { RootState } from "@/app/store";
+import { fetchEventById } from "@/features/events/eventSlice";
+import { format } from "date-fns";
+import EventDetailsSkeleton from "@/components/ui/EventDetailsSkeleton";
+import { weiToEther } from "@/utils/formatter";
+
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_your_stripe_publishable_key');
 
 // Function to generate 50 seats with A1, B1 format
 const generateSeats = () => {
@@ -48,37 +58,39 @@ const allSeats = generateSeats();
 
 const PurchaseTicket = () => {
   useSmoothScrollToTop();
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const dispatch = useDispatch();
+  const dispatch = useAppDispatch();
 
-  const { loading, error, success, ticketId } = useSelector(
-    (state) => state.ticket
+  const { loading: ticketLoading, error: ticketError, success, ticketId } = useAppSelector(
+    (state: RootState) => state.ticket
   );
 
-  const [selectedSeat, setSelectedSeat] = useState(null);
+  const { paymentIntentId, isPaymentSuccessful } = useAppSelector(
+    (state: RootState) => state.payment
+  );
+
+  const { items: events, currentItem, loading: eventLoading, error: eventError } = useAppSelector((state: RootState) => state.events);
+
+  const [selectedSeat, setSelectedSeat] = useState<string | null>(null);
   const [selectedPayment, setSelectedPayment] = useState("crypto");
 
-  const event = {
-    id: parseInt(id || "1"),
-    title: "Tech Conference 2024",
-    date: "2024-03-15",
-    time: "09:00 AM - 06:00 PM",
-    venue: "Convention Center, NYC",
-    fullAddress: "123 Convention Ave, New York, NY 10001",
-    price: 0.15, // ETH
-    fiatPrice: 299, // USD
-    available: 25, // Updated based on mock data
-    total: 50, // Updated based on mock data
-    verified: true,
-    organizer: "TechCorp Events",
-  };
+  const eventFromList = events.find((event: any) => event.id === id);
+
+  useEffect(() => {
+    if (!eventFromList && id) {
+      dispatch(fetchEventById(id));
+    }
+  }, [id, eventFromList, dispatch]);
+
+  const event = eventFromList || currentItem;
 
   const quantity = selectedSeat ? 1 : 0;
-  const totalPrice = event.price * quantity;
-  const totalFiatPrice = event.fiatPrice * quantity;
+  const priceInEthString = event ? weiToEther(event.priceInWei) : "0.000";
+  const priceInEth = event ? parseFloat(priceInEthString) : 0;
+  const totalPrice = priceInEth * quantity;
 
-  const handleSeatSelection = (seatNumber) => {
+  const handleSeatSelection = (seatNumber: string) => {
     if (selectedSeat === seatNumber) {
       setSelectedSeat(null); // Deselect if already selected
     } else {
@@ -86,11 +98,25 @@ const PurchaseTicket = () => {
     }
   };
 
-  const handlePurchase = () => {
-    // Clear any previous error before attempting a new purchase
-    if (error) {
+  const handlePaymentMethodChange = (method: string) => {
+    setSelectedPayment(method);
+    // Only reset states if there was an error or if switching TO card payment
+    if (ticketError) {
       dispatch(resetTicketState());
     }
+    // Only reset payment state when switching to card payment to avoid redundant calls
+    if (method === "card") {
+      dispatch(resetPaymentState());
+    }
+  };
+
+  const handlePurchase = () => {
+    // Clear any previous error before attempting a new purchase
+    if (ticketError) {
+      dispatch(resetTicketState());
+    }
+
+    if (!event) return;
 
     const payload = {
       publicEventId: event.id,
@@ -98,13 +124,35 @@ const PurchaseTicket = () => {
       initialOwner:
         localStorage.getItem("userWallet") ||
         "0x2546BcD3c84621e976D8185a91A922aE77ECEc30",
+      ...(paymentIntentId && { paymentIntentId }), // payment intent Id for stripe payments (card)
     };
     dispatch(createTicket(payload));
   };
 
+  const handleStripePaymentSuccess = (paymentId: string) => {
+    // Create the ticket with payment proof
+    if (!event) return;
+    const payload = {
+      publicEventId: event.id,
+      seat: selectedSeat,
+      initialOwner:
+        localStorage.getItem("userWallet") ||
+        "0x2546BcD3c84621e976D8185a91A922aE77ECEc30",
+      paymentIntentId: paymentId,
+    };
+    dispatch(createTicket(payload));
+
+    // Reset payment state after successful ticket creation
+    setTimeout(() => {
+      dispatch(resetPaymentState());
+    }, 1000); // Small delay to allow success screen to show
+  };
+
   useEffect(() => {
+    // Cleanup function only runs when component unmounts
     return () => {
       dispatch(resetTicketState());
+      dispatch(resetPaymentState());
     };
   }, [dispatch]);
 
@@ -112,6 +160,29 @@ const PurchaseTicket = () => {
     // Implement logic to save the NFT to a crypto wallet
     alert(`Saving NFT ticket with Token ID: ${ticketId} to your wallet.`);
   };
+
+  if (eventLoading && !event) {
+    return <EventDetailsSkeleton />;
+  }
+
+  if (eventError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-center">
+        <div>
+          <h2 className="text-xl font-semibold text-destructive">Failed to load event details.</h2>
+          <p className="text-muted-foreground">{eventError.toString()}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!event) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <h2 className="text-xl font-semibold">Event not found</h2>
+      </div>
+    );
+  }
 
   if (success) {
     return (
@@ -134,10 +205,10 @@ const PurchaseTicket = () => {
                 </div>
 
                 <div className="bg-glass/30 rounded-lg p-4 border border-glass-border">
-                  <h3 className="font-semibold mb-2">{event.title}</h3>
+                  <h3 className="font-semibold mb-2">{event.name}</h3>
                   <div className="text-sm text-muted-foreground space-y-1">
                     <div>Seat: {selectedSeat}</div>
-                    <div>Total Paid: {totalPrice.toFixed(3)} ETH (${totalFiatPrice})</div>
+                    <div>Total Paid: {weiToEther(totalPrice * 1e18)} ETH</div>
                     <div>**Token ID**: {ticketId}</div>
                   </div>
                 </div>
@@ -203,9 +274,18 @@ const PurchaseTicket = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="space-y-6">
             <Card className="bg-glass/80 backdrop-blur-glass border-glass-border">
+              <CardContent className="p-0">
+                <img
+                  src={event.imageUrl || 'https://placehold.co/600x400/211138/FFFFFF?text=Event'}
+                  alt={event.name}
+                  className="w-full h-64 object-cover rounded-t-lg"
+                />
+              </CardContent>
+            </Card>
+            <Card className="bg-glass/80 backdrop-blur-glass border-glass-border">
               <CardHeader>
-                <CardTitle className="text-xl">{event.title}</CardTitle>
-                {event.verified && (
+                <CardTitle className="text-xl">{event.name}</CardTitle>
+                {event.active && (
                   <Badge className="w-fit bg-success/90 text-success-foreground">
                     <Shield className="h-3 w-3 mr-1" /> Verified Event
                   </Badge>
@@ -217,31 +297,34 @@ const PurchaseTicket = () => {
                   <div className="flex items-center">
                     <Calendar className="h-4 w-4 text-primary mr-3" />
                     <div>
-                      <div className="font-medium text-sm">{event.date}</div>
-                      <div className="text-xs text-muted-foreground">{event.time}</div>
+                      <div className="font-medium text-sm">{format(new Date(event.eventDate), "MMMM dd, yyyy")}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {format(new Date(event.eventStartTime), "p")} - {format(new Date(event.eventEndTime), "p")}
+                      </div>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center">
                     <MapPin className="h-4 w-4 text-primary mr-3" />
                     <div>
-                      <div className="font-medium text-sm">{event.venue}</div>
-                      <div className="text-xs text-muted-foreground">{event.fullAddress}</div>
+                      <div className="font-medium text-sm">{event.location || 'Online Event'}</div>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center">
                     <Users className="h-4 w-4 text-primary mr-3" />
                     <div>
-                      <div className="font-medium text-sm">{event.available} available</div>
-                      <div className="text-xs text-muted-foreground">of {event.total} total tickets</div>
+                      <div className="font-medium text-sm">{allSeats.filter(s => s.isAvailable).length} available</div>
+                      <div className="text-xs text-muted-foreground">of {event.totalSupply} total tickets</div>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center">
                     <Clock className="h-4 w-4 text-primary mr-3" />
                     <div>
-                      <div className="font-medium text-sm">By {event.organizer}</div>
+                      <div className="font-medium text-sm truncate" title={event.organizerAddress}>
+                        By {event.organizerAddress.substring(0, 6)}...{event.organizerAddress.substring(event.organizerAddress.length - 4)}
+                      </div>
                       <div className="text-xs text-muted-foreground">Trusted organizer</div>
                     </div>
                   </div>
@@ -292,13 +375,12 @@ const PurchaseTicket = () => {
                           selectedSeat === seat.number
                             ? "hero"
                             : seat.isAvailable
-                            ? "glass"
-                            : "secondary"
+                              ? "glass"
+                              : "secondary"
                         }
                         size="sm"
-                        className={`font-semibold transition-transform duration-200 hover:scale-105 ${
-                          !seat.isAvailable && "opacity-50 cursor-not-allowed"
-                        }`}
+                        className={`font-semibold transition-transform duration-200 hover:scale-105 ${!seat.isAvailable && "opacity-50 cursor-not-allowed"
+                          }`}
                         disabled={!seat.isAvailable && selectedSeat !== seat.number}
                         onClick={() => handleSeatSelection(seat.number)}
                       >
@@ -320,20 +402,16 @@ const PurchaseTicket = () => {
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span>Price per ticket:</span>
-                      <span>{event.price} ETH (${event.fiatPrice})</span>
+                      <span>{priceInEthString} ETH</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Tickets selected:</span>
                       <span>{quantity}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Gas fees (estimated):</span>
-                      <span>{quantity > 0 ? "~0.003 ETH (~$5)" : "N/A"}</span>
-                    </div>
                     <Separator className="bg-glass-border" />
                     <div className="flex justify-between font-semibold text-base">
                       <span>Total:</span>
-                      <span>{totalPrice.toFixed(3)} ETH (${totalFiatPrice + (quantity > 0 ? 5 : 0)})</span>
+                      <span>{weiToEther(totalPrice * 1e18)} ETH</span>
                     </div>
                   </div>
                 </div>
@@ -344,7 +422,7 @@ const PurchaseTicket = () => {
                     <Button
                       variant={selectedPayment === "crypto" ? "hero" : "glass"}
                       className="h-16 flex-col justify-center"
-                      onClick={() => setSelectedPayment("crypto")}
+                      onClick={() => handlePaymentMethodChange("crypto")}
                     >
                       <Wallet className="h-5 w-5 mb-1" />
                       <span className="text-sm">Pay with Crypto</span>
@@ -353,7 +431,7 @@ const PurchaseTicket = () => {
                     <Button
                       variant={selectedPayment === "card" ? "hero" : "glass"}
                       className="h-16 flex-col justify-center"
-                      onClick={() => setSelectedPayment("card")}
+                      onClick={() => handlePaymentMethodChange("card")}
                     >
                       <CreditCard className="h-5 w-5 mb-1" />
                       <span className="text-sm">Pay with Card</span>
@@ -375,36 +453,42 @@ const PurchaseTicket = () => {
                 )}
 
                 {/* Error Display */}
-                {error && (
+                {ticketError && (
                   <div className="flex items-center justify-center gap-3 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm font-medium">
                     <AlertCircle className="h-5 w-5" />
-                    <span>{error}</span>
+                    <span>{ticketError}</span>
                   </div>
                 )}
-                
-                <Button
-                  variant="hero"
-                  size="lg"
-                  className="w-full text-base font-semibold"
-                  onClick={handlePurchase}
-                  disabled={loading || !selectedSeat}
-                >
-                  {loading ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                      Processing Payment...
-                    </>
-                  ) : (
-                    <>
-                      {selectedPayment === "crypto" ? (
+
+                {selectedPayment === "card" ? (
+                  <Elements stripe={stripePromise}>
+                    <StripePaymentForm
+                      onPaymentSuccess={handleStripePaymentSuccess}
+                      eventId={event.id}
+                      disabled={!selectedSeat}
+                    />
+                  </Elements>
+                ) : (
+                  <Button
+                    variant="hero"
+                    size="lg"
+                    className="w-full text-base font-semibold"
+                    onClick={handlePurchase}
+                    disabled={ticketLoading || !selectedSeat}
+                  >
+                    {ticketLoading ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                        Processing Payment...
+                      </>
+                    ) : (
+                      <>
                         <Wallet className="h-4 w-4 mr-2" />
-                      ) : (
-                        <CreditCard className="h-4 w-4 mr-2" />
-                      )}
-                      Purchase NFT Ticket • {totalPrice.toFixed(3)} ETH
-                    </>
-                  )}
-                </Button>
+                        Purchase NFT Ticket • {weiToEther(totalPrice * 1e18)} ETH
+                      </>
+                    )}
+                  </Button>
+                )}
 
                 <div className="text-center text-xs text-muted-foreground">
                   <p>By purchasing, you agree to our Terms of Service and Privacy Policy.</p>

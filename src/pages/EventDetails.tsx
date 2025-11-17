@@ -10,17 +10,11 @@ import { Separator } from "@/components/ui/separator";
 import useSmoothScrollToTop from "@/hooks/useSmoothScrollToTop";
 import EventDetailsSkeleton from "@/components/ui/EventDetailsSkeleton";
 import { format } from "date-fns";
-import { 
-  Calendar, MapPin, Users, Shield, Clock, Wallet, Share2, Heart 
+import {
+  Calendar, MapPin, Users, Shield, Clock, Share2, Heart
 } from "lucide-react";
 import { RootState } from "@/app/store";
-
-// Helper function to convert Wei to Ether
-const weiToEther = (wei: string | number) => {
-  if (!wei) return "0.000";
-  const ether = Number(wei) / 1e18;
-  return ether.toFixed(3);
-};
+import { weiToEther } from "@/utils/formatter";
 
 const EventDetails = () => {
   useSmoothScrollToTop();
@@ -48,7 +42,7 @@ const EventDetails = () => {
       });
       return;
     }
-    
+
     if (currentUser) {
       navigate(`/purchaseticket/${event.id}`);
     } else {
@@ -70,10 +64,10 @@ const EventDetails = () => {
       </div>
     );
   }
-  
+
   if (!event) {
     return (
-       <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <h2 className="text-xl font-semibold">Event not found</h2>
       </div>
     );
@@ -177,9 +171,9 @@ const EventDetails = () => {
                   <div className="text-3xl font-bold text-primary mb-1">{weiToEther(event.priceInWei)} ETH</div>
                 </div>
                 <Separator className="bg-glass-border" />
-                <Button 
-                  variant="hero" 
-                  size="lg" 
+                <Button
+                  variant="hero"
+                  size="lg"
                   className="w-full text-base font-semibold"
                   onClick={handlePurchaseClick}
                 >

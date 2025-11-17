@@ -3,6 +3,8 @@ import authReducer from '../features/auth/authSlice';
 import eventReducer from '../features/events/eventSlice';
 import ticketReducer from '../features/ticket/ticketSlice';
 import walletReducer from '../features/wallet/walletReducer';
+import paymentReducer from "../features/payment/paymentSlice";
+
 
 export const store = configureStore({
   reducer: {
@@ -10,5 +12,6 @@ export const store = configureStore({
     events: eventReducer,
     ticket: ticketReducer,
     wallet: walletReducer,
+    payment: paymentReducer,
   },
 });
