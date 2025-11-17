@@ -5,9 +5,10 @@ import { z } from "zod";
 import { useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { createEvent, clearLastCreatedEvent } from "@/features/events/eventSlice";
+import { setWalletAddress, clearWalletAddress } from "@/features/wallet/walletReducer";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarIcon, Tag, Loader2 } from "lucide-react";
+import { CalendarIcon, Tag, Loader2, Wallet, ShieldCheck, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,6 +22,10 @@ import SuccessDialog from "@/components/ui/SuccessDialog";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { compressImage } from "@/lib/image-compressor";
+import apiClient from "@/services/api";
+import { getEventManagerContract, extractEventIdFromReceipt } from "@/lib/blockchain/eventManager";
+import { requestConnectedAccount, ensureTargetNetwork } from "@/services/walletService";
+import { parseEther } from "ethers";
 
 const eventSchema = z.object({
   name: z.string().min(3, "Event name is required"),
@@ -36,13 +41,68 @@ const eventSchema = z.object({
 });
 
 type EventFormData = z.infer<typeof eventSchema>;
+type CreationStrategy = "BACKEND_MANAGED" | "SELF_CUSTODY";
+
+interface ImageUploadResponse {
+  imageUrl: string;
+}
+
+const uploadImageToIpfs = async (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file, file.name);
+  const { data } = await apiClient.post<ImageUploadResponse>(
+    '/ipfs/upload/image',
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  );
+
+  if (!data?.imageUrl) {
+    throw new Error('Image upload failed. Missing IPFS URL.');
+    }
+  return data.imageUrl;
+};
+
+const uploadMetadataToIpfs = async (metadata: Record<string, unknown>) => {
+  const payload = new URLSearchParams();
+  payload.append('jsonContent', JSON.stringify(metadata));
+
+  const { data } = await apiClient.post<string>(
+    '/ipfs/upload',
+    payload,
+    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+  );
+
+  if (!data) {
+    throw new Error('Failed to upload metadata to IPFS.');
+  }
+
+  return `ipfs://${data}`;
+};
 
 const CreateEvent = () => {
   useSmoothScrollToTop();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const { loading, error, lastCreatedEvent } = useAppSelector((state) => state.events);
+  const walletAddress = useAppSelector((state) => state.wallet.address);
   const [isCompressing, setIsCompressing] = useState(false);
+  const [creationStrategy, setCreationStrategy] = useState<CreationStrategy>("BACKEND_MANAGED");
+  const [isSelfCustodySubmitting, setIsSelfCustodySubmitting] = useState(false);
+  const [selfCustodyEvent, setSelfCustodyEvent] = useState<{ id: string; name: string } | null>(null);
+  const strategyOptions = [
+    {
+      key: "BACKEND_MANAGED" as CreationStrategy,
+      title: "Platform Managed",
+      description: "We publish the event using the platform operator and cover the gas fees.",
+      icon: ShieldCheck,
+    },
+    {
+      key: "SELF_CUSTODY" as CreationStrategy,
+      title: "Self-Custody (MetaMask)",
+      description: "You sign the transaction with MetaMask and pay the gas to keep full control.",
+      icon: Wallet,
+    },
+  ];
 
   const form = useForm<EventFormData>({
     resolver: zodResolver(eventSchema),
@@ -58,30 +118,118 @@ const CreateEvent = () => {
     },
   });
 
+  const successEvent = selfCustodyEvent ?? lastCreatedEvent;
+
   const onSubmit = async (data: EventFormData) => {
-    setIsCompressing(true);
-    const eventDateUTC = data.eventDate.toISOString().split('T')[0];
+    try {
+      setIsCompressing(true);
+      const eventDateUTC = data.eventDate.toISOString().split('T')[0];
+      const originalImageFile = data.imageFile[0];
+      const compressedImageFile = await compressImage(originalImageFile);
 
-    const originalImageFile = data.imageFile[0];
-    const compressedImageFile = await compressImage(originalImageFile);
-    setIsCompressing(false);
+      const formData = new FormData();
+      const normalizedEventDate = `${eventDateUTC}T00:00:00Z`;
+      formData.append('name', data.name);
+      formData.append('eventDateUTC', normalizedEventDate);
+      formData.append('totalSupply', data.totalSupply.toString());
+      formData.append('priceInEther', data.priceInEther.toString());
+      formData.append('description', data.description);
+      formData.append('eventStartTime', `${eventDateUTC}T${data.eventStartTime}:00Z`);
+      formData.append('eventEndTime', `${eventDateUTC}T${data.eventEndTime}:00Z`);
+      formData.append('imageFile', compressedImageFile, originalImageFile.name);
+      formData.append('category', data.category);
+      formData.append('location', data.location);
 
-    const formData = new FormData();
-    formData.append('name', data.name);
-    formData.append('eventDateUTC', `${eventDateUTC}T00:00:00Z`);
-    formData.append('totalSupply', data.totalSupply.toString());
-    formData.append('priceInEther', data.priceInEther.toString());
-    formData.append('description', data.description);
-    formData.append('eventStartTime', `${eventDateUTC}T${data.eventStartTime}:00Z`);
-    formData.append('eventEndTime', `${eventDateUTC}T${data.eventEndTime}:00Z`);
-    
-    // THE FIX: Add the original filename as the third argument
-    formData.append('imageFile', compressedImageFile, originalImageFile.name);
-    
-    formData.append('category', data.category);
-    formData.append('location', data.location);
-    
-    dispatch(createEvent(formData));
+      setIsCompressing(false);
+
+      if (creationStrategy === "SELF_CUSTODY") {
+        await handleSelfCustodyCreation({
+          eventDateUTC,
+          formValues: data,
+          compressedImageFile,
+        });
+        return;
+      }
+
+      dispatch(createEvent(formData));
+    } catch (err: unknown) {
+      console.error(err);
+      const description = err instanceof Error ? err.message : "Please try again.";
+      toast.error("Unable to prepare your event", {
+        description,
+      });
+      setIsCompressing(false);
+    }
+  };
+
+  const handleSelfCustodyCreation = async ({
+    eventDateUTC,
+    formValues,
+    compressedImageFile,
+  }: {
+    eventDateUTC: string;
+    formValues: EventFormData;
+    compressedImageFile: File;
+  }) => {
+    if (!window.ethereum) {
+      toast.info("MetaMask is required", {
+        description: "Install the MetaMask extension to continue.",
+      });
+      return;
+    }
+
+    if (!walletAddress) {
+      toast.error("Wallet not connected", {
+        description: "Connect your MetaMask wallet to deploy from your account.",
+      });
+      return;
+    }
+
+    setIsSelfCustodySubmitting(true);
+    try {
+      const imageUrl = await uploadImageToIpfs(compressedImageFile);
+      const eventStartTime = `${eventDateUTC}T${formValues.eventStartTime}:00Z`;
+      const eventEndTime = `${eventDateUTC}T${formValues.eventEndTime}:00Z`;
+      const metadata = {
+        description: formValues.description,
+        image: imageUrl,
+        location: formValues.location,
+        eventStartTime,
+        eventEndTime,
+        category: formValues.category,
+      };
+
+      const metadataURI = await uploadMetadataToIpfs(metadata);
+      const normalizedEventDate = `${eventDateUTC}T00:00:00Z`;
+      const ticketPrice = parseEther(formValues.priceInEther.toString());
+      const eventTimestamp = BigInt(Math.floor(new Date(normalizedEventDate).getTime() / 1000));
+
+      const { contract } = await getEventManagerContract();
+      toast.info("Confirm the MetaMask transaction to publish your event.");
+      const tx = await contract.createEvent(
+        formValues.name,
+        eventTimestamp,
+        BigInt(formValues.totalSupply),
+        ticketPrice,
+        metadataURI
+      );
+
+      const receipt = await tx.wait();
+      const createdEventId = extractEventIdFromReceipt(receipt);
+      if (!createdEventId) {
+        throw new Error("Could not locate EventCreated log in the transaction receipt.");
+      }
+
+      toast.success("Event deployed with your wallet");
+      setSelfCustodyEvent({ id: createdEventId, name: formValues.name });
+      form.reset();
+    } catch (err: unknown) {
+      console.error(err);
+      const description = err instanceof Error ? err.message : "Something went wrong during deployment.";
+      toast.error("Self-custody deployment failed", { description });
+    } finally {
+      setIsSelfCustodySubmitting(false);
+    }
   };
   
   useEffect(() => {
@@ -96,21 +244,52 @@ const CreateEvent = () => {
   }, [lastCreatedEvent, error, form]);
 
   const handleCloseSuccessDialog = () => {
+    if (selfCustodyEvent) {
+      setSelfCustodyEvent(null);
+    }
     dispatch(clearLastCreatedEvent());
+  };
+
+  const handleInlineWalletConnect = async () => {
+    try {
+      const account = await requestConnectedAccount();
+      await ensureTargetNetwork();
+      dispatch(setWalletAddress(account));
+      toast.success("Wallet connected", {
+        description: `${account.substring(0, 6)}...${account.slice(-4)}`,
+      });
+    } catch (err: unknown) {
+      const description = err instanceof Error ? err.message : undefined;
+      toast.error("Wallet connection failed", description ? { description } : undefined);
+    }
+  };
+
+  const handleInlineWalletDisconnect = () => {
+    dispatch(clearWalletAddress());
+    toast.info("Wallet disconnected for this session.");
   };
 
   const categories = ["Music", "Conference", "Workshop", "Art", "Sports", "Festival", "Other"];
 
+  const isSubmitting = loading || isCompressing || isSelfCustodySubmitting;
+  const overlayText = isCompressing
+    ? "Compressing Image..."
+    : isSelfCustodySubmitting
+      ? "Awaiting MetaMask confirmation"
+      : "Creating Your Event on the Blockchain...";
+
   return (
     <>
       <LoadingOverlay 
-        isLoading={loading || isCompressing} 
-        text={isCompressing ? "Compressing Image..." : "Creating Your Event on the Blockchain..."} 
+        isLoading={isSubmitting} 
+        text={overlayText} 
       />
       <SuccessDialog 
-        isOpen={!!lastCreatedEvent}
+        isOpen={!!successEvent}
         onClose={handleCloseSuccessDialog}
-        event={lastCreatedEvent} variant={"created"}      />
+        event={successEvent}
+        variant={"created"}
+      />
       <div className="min-h-screen bg-gradient-hero py-8">
         <div className="container mx-auto px-4 max-w-4xl">
           <div className="mb-8 text-center">
@@ -132,6 +311,62 @@ const CreateEvent = () => {
             <CardContent>
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+                  <div className="space-y-4">
+                    <FormLabel className="text-base">Deployment Strategy</FormLabel>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {strategyOptions.map((option) => {
+                        const Icon = option.icon;
+                        const isActive = creationStrategy === option.key;
+                        return (
+                          <button
+                            type="button"
+                            key={option.key}
+                            onClick={() => setCreationStrategy(option.key)}
+                            className={cn(
+                              "flex flex-col items-start rounded-xl border p-4 text-left transition-all",
+                              "bg-glass/30 border-glass-border hover:border-primary/50",
+                              isActive && "border-primary bg-primary/10 shadow-glow"
+                            )}
+                          >
+                            <div className="flex items-center gap-3">
+                              <Icon className={cn("h-5 w-5", isActive ? "text-primary" : "text-muted-foreground")} />
+                              <p className="font-semibold">{option.title}</p>
+                            </div>
+                            <p className="text-sm text-muted-foreground mt-2">{option.description}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {creationStrategy === "SELF_CUSTODY" && (
+                      <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm space-y-3">
+                        <div className="flex items-start gap-2 text-primary">
+                          <AlertCircle className="h-4 w-4 mt-0.5" />
+                          <div>
+                            <p className="font-semibold">You will sign and pay gas using MetaMask.</p>
+                            <p className="text-muted-foreground">Make sure the wallet contains enough ETH on the selected network.</p>
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                          <p className="text-muted-foreground">
+                            {walletAddress
+                              ? `Connected wallet: ${walletAddress.substring(0, 6)}...${walletAddress.slice(-4)}`
+                              : "No wallet connected."}
+                          </p>
+                          <div className="flex gap-2">
+                            {!walletAddress ? (
+                              <Button type="button" variant="outline" onClick={handleInlineWalletConnect}>
+                                Connect Wallet
+                              </Button>
+                            ) : (
+                              <Button type="button" variant="ghost" onClick={handleInlineWalletDisconnect}>
+                                Disconnect
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <FormField control={form.control} name="name" render={({ field }) => (
                       <FormItem>
