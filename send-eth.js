@@ -10,7 +10,7 @@ async function transferETH() {
     const sender = new ethers.Wallet(senderPrivateKey, provider);
     
     // Your account (recipient)
-    const recipientPrivateKey = '0x40fcc8eef6db34b8f2e234c14edc795e7e1ca2d58f69f9ccf617229e16b3e393';
+    const recipientPrivateKey = '40fcc8eef6db34b8f2e234c14edc795e7e1ca2d58f69f9ccf617229e16b3e393';
     const recipient = new ethers.Wallet(recipientPrivateKey, provider);
     
     console.log('Sender (Account #7):', sender.address);

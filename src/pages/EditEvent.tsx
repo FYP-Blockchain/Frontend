@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -21,6 +21,10 @@ import SuccessDialog from "@/components/ui/SuccessDialog";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { compressImage } from "@/lib/image-compressor";
+import { isSelfCustodyEvent } from "@/lib/custody/custodyHelper";
+import { updateEventOnChain } from "@/lib/blockchain/eventManager";
+import { parseEther } from "ethers";
+import apiClient from "@/services/api";
 
 const eventSchema = z.object({
   name: z.string().min(3, "Event name is required"),
@@ -43,6 +47,9 @@ const EditEvent = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const { currentItem: event, loading, error, lastUpdatedEvent } = useAppSelector((state) => state.events);
+  const walletAddress = useAppSelector((state) => state.wallet.address);
+  const [isSelfCustodySubmitting, setIsSelfCustodySubmitting] = useState(false);
+  const [selfCustodySuccess, setSelfCustodySuccess] = useState<{ id: string; name: string } | null>(null);
 
   const form = useForm<EventFormData>({
     resolver: zodResolver(eventSchema),
@@ -71,8 +78,19 @@ const EditEvent = () => {
   }, [event, form]);
 
   const onSubmit = async (data: EventFormData) => {
+    if (!event) return;
+
+    const isSelfCustody = isSelfCustodyEvent(event, walletAddress);
     const eventDateUTC = data.eventDate.toISOString().split('T')[0];
 
+    if (isSelfCustody) {
+      await handleSelfCustodyUpdate(data, eventDateUTC);
+    } else {
+      await handleBackendUpdate(data, eventDateUTC);
+    }
+  };
+
+  const handleBackendUpdate = async (data: EventFormData, eventDateUTC: string) => {
     const formData = new FormData();
     formData.append('name', data.name);
     formData.append('eventDateUTC', `${eventDateUTC}T00:00:00Z`);
@@ -91,6 +109,73 @@ const EditEvent = () => {
     
     dispatch(updateEvent({ eventId: id, formData }));
   };
+
+  const handleSelfCustodyUpdate = async (data: EventFormData, eventDateUTC: string) => {
+    if (!event || !id) return;
+    
+    setIsSelfCustodySubmitting(true);
+    try {
+      const originalImageFile = data.imageFile && data.imageFile.length > 0 ? data.imageFile[0] : null;
+      let imageUrl = event.imageUrl;
+
+      if (originalImageFile) {
+        const compressedImageFile = await compressImage(originalImageFile);
+        const formData = new FormData();
+        formData.append('file', compressedImageFile, originalImageFile.name);
+        const { data: uploadResponse } = await apiClient.post<{ imageUrl: string }>(
+          '/ipfs/upload/image',
+          formData,
+          { headers: { 'Content-Type': 'multipart/form-data' } }
+        );
+        imageUrl = uploadResponse.imageUrl;
+      }
+
+      const eventStartTime = `${eventDateUTC}T${data.eventStartTime}:00Z`;
+      const eventEndTime = `${eventDateUTC}T${data.eventEndTime}:00Z`;
+      const metadata = {
+        description: data.description,
+        image: imageUrl,
+        location: data.location,
+        eventStartTime,
+        eventEndTime,
+        category: data.category,
+      };
+
+      const payload = new URLSearchParams();
+      payload.append('jsonContent', JSON.stringify(metadata));
+      const { data: metadataCid } = await apiClient.post<string>(
+        '/ipfs/upload',
+        payload,
+        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+      );
+      const metadataURI = `ipfs://${metadataCid}`;
+
+      const normalizedEventDate = `${eventDateUTC}T00:00:00Z`;
+      const ticketPrice = parseEther(data.priceInEther.toString());
+      const eventTimestamp = BigInt(Math.floor(new Date(normalizedEventDate).getTime() / 1000));
+
+      toast.info("Confirm the MetaMask transaction to update your event.");
+      await updateEventOnChain(
+        id,
+        data.name,
+        eventTimestamp,
+        metadataURI,
+        BigInt(data.totalSupply),
+        ticketPrice
+      );
+
+      await apiClient.post(`/event/cache/evict?eventId=${id}`);
+      toast.success("Event updated on-chain");
+      setSelfCustodySuccess({ id, name: data.name });
+      form.reset();
+    } catch (err: unknown) {
+      console.error(err);
+      const description = err instanceof Error ? err.message : "Something went wrong during update.";
+      toast.error("Self-custody update failed", { description });
+    } finally {
+      setIsSelfCustodySubmitting(false);
+    }
+  };
   
   useEffect(() => {
     if (error) {
@@ -99,19 +184,31 @@ const EditEvent = () => {
   }, [error]);
 
   const handleCloseSuccessDialog = () => {
+    if (selfCustodySuccess) {
+      setSelfCustodySuccess(null);
+    }
     dispatch(clearLastUpdatedEvent());
-    navigate('/my-events'); // Navigate back after closing the dialog
+    navigate('/my-events');
   };
+
+  const successEvent = selfCustodySuccess ?? lastUpdatedEvent;
 
   const categories = ["Music", "Conference", "Workshop", "Art", "Sports", "Festival", "Other"];
 
+  const isSubmitting = loading || isSelfCustodySubmitting;
+  const overlayText = isSelfCustodySubmitting
+    ? "Awaiting MetaMask confirmation..."
+    : form.formState.isSubmitting
+      ? "Saving Changes..."
+      : "Loading Event Details...";
+
   return (
     <>
-      <LoadingOverlay isLoading={loading} text={form.formState.isSubmitting ? "Saving Changes..." : "Loading Event Details..."} />
+      <LoadingOverlay isLoading={isSubmitting} text={overlayText} />
       <SuccessDialog 
-        isOpen={!!lastUpdatedEvent} 
+        isOpen={!!successEvent} 
         onClose={handleCloseSuccessDialog} 
-        event={lastUpdatedEvent} 
+        event={successEvent} 
         variant="updated"
       />
       <div className="min-h-screen bg-gradient-hero py-8">
@@ -246,8 +343,8 @@ const EditEvent = () => {
                   )} />
 
                   <div className="pt-6">
-                    <Button type="submit" variant="hero" size="lg" className="w-full text-lg" disabled={loading}>
-                      {loading ? (
+                    <Button type="submit" variant="hero" size="lg" className="w-full text-lg" disabled={isSubmitting}>
+                      {isSubmitting ? (
                         <>
                           <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                           Saving Changes...

@@ -44,7 +44,7 @@ const ticketSlice = createSlice({
       .addCase(createTicket.fulfilled, (state, action) => {
         state.loading = false;
         state.success = true;
-        state.ticketId = action.payload || null;
+        state.ticketId = action.payload?.tokenId || null;
       })
       .addCase(createTicket.rejected, (state, action) => {
         state.loading = false;
