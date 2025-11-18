@@ -31,6 +31,10 @@ export const purchaseTicketWithMetaMask = async (
     throw new Error('MetaMask is not installed');
   }
 
+  if (!TICKET_NFT_ADDRESS) {
+    throw new Error('TicketNFT contract address is not configured. Please contact support.');
+  }
+
   await ensureTargetNetwork();
 
   const provider = new ethers.BrowserProvider(window.ethereum);
