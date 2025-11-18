@@ -117,3 +117,48 @@ export const ensureTargetNetwork = async () => {
 		params: [{ chainId: getTargetChainId() }],
 	});
 };
+
+export const addNFTToWallet = async (tokenId, tokenAddress) => {
+	const ethereum = getEthereum();
+	if (!ethereum) {
+		throw new Error('MetaMask is not available.');
+	}
+
+	// Ensure we're on the correct network first
+	await ensureTargetNetwork();
+
+	try {
+		// For local networks, MetaMask's wallet_watchAsset may not work well
+		// Instead, we'll use wallet_switchEthereumChain to ensure network is correct
+		// and then return the details for manual import
+		const chainId = await ethereum.request({ method: 'eth_chainId' });
+		
+		// Try to add the NFT (this may fail on local networks, which is expected)
+		try {
+			const wasAdded = await ethereum.request({
+				method: 'wallet_watchAsset',
+				params: {
+					type: 'ERC721',
+					options: {
+						address: tokenAddress,
+						tokenId: tokenId.toString(),
+					},
+				},
+			});
+			return { success: true, method: 'auto' };
+		} catch (watchError) {
+			// If auto-add fails (common on local networks), return info for manual import
+			console.log('Auto-add not supported, will use manual import', watchError);
+			return { 
+				success: false, 
+				method: 'manual',
+				contractAddress: tokenAddress,
+				tokenId: tokenId.toString(),
+				chainId
+			};
+		}
+	} catch (error) {
+		console.error('Error adding NFT to wallet:', error);
+		throw error;
+	}
+};

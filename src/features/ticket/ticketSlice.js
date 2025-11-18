@@ -44,7 +44,8 @@ const ticketSlice = createSlice({
       .addCase(createTicket.fulfilled, (state, action) => {
         state.loading = false;
         state.success = true;
-        state.ticketId = action.payload?.tokenId || null;
+        // Store tokenId as string (backend now returns it as string)
+        state.ticketId = action.payload?.tokenId?.toString() || null;
       })
       .addCase(createTicket.rejected, (state, action) => {
         state.loading = false;

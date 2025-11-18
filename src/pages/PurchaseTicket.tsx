@@ -22,6 +22,11 @@ import {
   QrCode
 } from "lucide-react";
 import { createTicket, resetTicketState } from "@/features/ticket/ticketSlice";
+import { addNFTToWallet } from "@/services/walletService";
+import { checkNFTOwnership } from "@/lib/helpers/ticketNFT";
+import { purchaseTicketWithMetaMask } from "@/lib/helpers/ticketPurchase";
+import { useSelector as useWalletSelector } from "react-redux";
+import { ethers } from "ethers";
 
 // Function to generate 50 seats with A1, B1 format
 const generateSeats = () => {
@@ -56,8 +61,14 @@ const PurchaseTicket = () => {
     (state) => state.ticket
   );
 
+  const walletAddress = useWalletSelector((state) => state.wallet.address);
+
   const [selectedSeat, setSelectedSeat] = useState(null);
   const [selectedPayment, setSelectedPayment] = useState("crypto");
+  const [cryptoLoading, setCryptoLoading] = useState(false);
+  const [cryptoError, setCryptoError] = useState(null);
+  const [cryptoSuccess, setCryptoSuccess] = useState(false);
+  const [cryptoTicketId, setCryptoTicketId] = useState(null);
 
   const event = {
     id: parseInt(id || "1"),
@@ -87,6 +98,24 @@ const PurchaseTicket = () => {
   };
 
   const handlePurchase = () => {
+    if (!walletAddress) {
+      alert("Please connect your MetaMask wallet first to purchase a ticket.");
+      return;
+    }
+
+    if (!selectedSeat) {
+      alert("Please select a seat first.");
+      return;
+    }
+
+    if (selectedPayment === "crypto") {
+      handleCryptoPurchase();
+    } else {
+      handleCardPurchase();
+    }
+  };
+
+  const handleCardPurchase = () => {
     // Clear any previous error before attempting a new purchase
     if (error) {
       dispatch(resetTicketState());
@@ -95,11 +124,36 @@ const PurchaseTicket = () => {
     const payload = {
       publicEventId: event.id,
       seat: selectedSeat,
-      initialOwner:
-        localStorage.getItem("userWallet") ||
-        "0x2546BcD3c84621e976D8185a91A922aE77ECEc30",
+      initialOwner: walletAddress,
     };
     dispatch(createTicket(payload));
+  };
+
+  const handleCryptoPurchase = async () => {
+    setCryptoLoading(true);
+    setCryptoError(null);
+
+    try {
+      // Convert ETH price to Wei
+      const priceInWei = ethers.parseEther(event.price.toString());
+
+      const result = await purchaseTicketWithMetaMask({
+        eventId: event.id.toString(),
+        seat: selectedSeat,
+        ticketPriceWei: priceInWei.toString(),
+        organizerAddress: event.organizerAddress || "0x70997970C51812dc3A010C7d01b50e0d17dc79C8", // TODO: Get from event
+        buyerAddress: walletAddress,
+      });
+
+      setCryptoTicketId(result.tokenId);
+      setCryptoSuccess(true);
+      console.log('Purchase successful:', result);
+    } catch (err) {
+      console.error('Crypto purchase failed:', err);
+      setCryptoError(err.message || 'Failed to purchase ticket with crypto');
+    } finally {
+      setCryptoLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -108,12 +162,90 @@ const PurchaseTicket = () => {
     };
   }, [dispatch]);
 
-  const handleSaveToWallet = () => {
-    // Implement logic to save the NFT to a crypto wallet
-    alert(`Saving NFT ticket with Token ID: ${ticketId} to your wallet.`);
+  const handleSaveToWallet = async () => {
+    try {
+      const ticketNFTAddress = import.meta.env.VITE_TICKET_NFT_ADDRESS;
+      if (!ticketNFTAddress) {
+        throw new Error('TicketNFT contract address not configured');
+      }
+
+      const displayTicketId = cryptoSuccess ? cryptoTicketId : ticketId;
+      
+      if (!displayTicketId) {
+        throw new Error('No ticket ID available');
+      }
+
+      // Convert ticket ID to string and ensure it's a valid format
+      const tokenIdString = displayTicketId.toString();
+      console.log('Checking ownership for token ID:', tokenIdString);
+
+      // Wait a moment for blockchain to sync (especially after backend minting)
+      if (!cryptoSuccess) {
+        console.log('Waiting for blockchain to sync...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+
+      // First, verify ownership on the blockchain
+      const isOwner = await checkNFTOwnership(tokenIdString, walletAddress);
+      
+      if (!isOwner) {
+        alert('⚠️ Ownership verification failed.\n\nThe NFT may still be processing on the blockchain. This can happen if:\n\n1. The transaction is still pending\n2. The backend minting failed\n3. The blockchain needs more time to sync\n\nPlease wait a few seconds and try again. If the problem persists, contact support with this ticket ID: ' + tokenIdString);
+        return;
+      }
+
+      // Copy details to clipboard for convenience
+      try {
+        await navigator.clipboard.writeText(`${ticketNFTAddress}\n${tokenIdString}`);
+      } catch (e) {
+        // Clipboard copy is optional, ignore errors
+      }
+
+      // Show confirmation dialog and offer to open MetaMask
+      const userConfirmed = window.confirm(
+        `✅ NFT Ownership Verified!\n\n` +
+        `Your ticket NFT is confirmed on the blockchain.\n\n` +
+        `Contract: ${ticketNFTAddress}\n` +
+        `Token ID: ${tokenIdString}\n\n` +
+        `📋 Details copied to clipboard!\n\n` +
+        `To view in MetaMask:\n` +
+        `1. Click OK to open MetaMask\n` +
+        `2. Go to NFTs tab\n` +
+        `3. Click "Import NFT"\n` +
+        `4. Paste the contract address (from clipboard)\n` +
+        `5. Enter token ID: ${tokenIdString}\n\n` +
+        `Click OK to open MetaMask, or Cancel to dismiss.`
+      );
+
+      if (userConfirmed && window.ethereum) {
+        // Open MetaMask by requesting accounts
+        try {
+          await window.ethereum.request({ method: 'eth_requestAccounts' });
+          
+          // Show follow-up reminder after MetaMask opens
+          setTimeout(() => {
+            alert(
+              `MetaMask is now open!\n\n` +
+              `📍 Next steps:\n` +
+              `1. Click on the "NFTs" tab\n` +
+              `2. Click "Import NFT"\n` +
+              `3. Paste contract address:\n   ${ticketNFTAddress}\n` +
+              `4. Enter token ID:\n   ${tokenIdString}\n\n` +
+              `💡 Details are in your clipboard - just paste!`
+            );
+          }, 500);
+        } catch (error) {
+          console.error('Error opening MetaMask:', error);
+        }
+      }
+
+    } catch (error) {
+      console.error('Error verifying NFT:', error);
+      alert(`Failed to verify NFT: ${error.message}`);
+    }
   };
 
-  if (success) {
+  if (success || cryptoSuccess) {
+    const displayTicketId = cryptoSuccess ? cryptoTicketId : ticketId;
     return (
       <div className="min-h-screen bg-gradient-hero">
         <div className="container mx-auto px-4 py-8">
@@ -138,7 +270,7 @@ const PurchaseTicket = () => {
                   <div className="text-sm text-muted-foreground space-y-1">
                     <div>Seat: {selectedSeat}</div>
                     <div>Total Paid: {totalPrice.toFixed(3)} ETH (${totalFiatPrice})</div>
-                    <div>**Token ID**: {ticketId}</div>
+                    <div>**Token ID**: {displayTicketId}</div>
                   </div>
                 </div>
 
@@ -375,10 +507,10 @@ const PurchaseTicket = () => {
                 )}
 
                 {/* Error Display */}
-                {error && (
+                {(error || cryptoError) && (
                   <div className="flex items-center justify-center gap-3 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm font-medium">
                     <AlertCircle className="h-5 w-5" />
-                    <span>{error}</span>
+                    <span>{error || cryptoError}</span>
                   </div>
                 )}
                 
@@ -387,12 +519,12 @@ const PurchaseTicket = () => {
                   size="lg"
                   className="w-full text-base font-semibold"
                   onClick={handlePurchase}
-                  disabled={loading || !selectedSeat}
+                  disabled={loading || cryptoLoading || !selectedSeat}
                 >
-                  {loading ? (
+                  {(loading || cryptoLoading) ? (
                     <>
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                      Processing Payment...
+                      {cryptoLoading ? 'Confirming Transaction...' : 'Processing Payment...'}
                     </>
                   ) : (
                     <>
