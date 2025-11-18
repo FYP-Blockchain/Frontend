@@ -219,9 +219,12 @@ const CreateEvent = () => {
       if (!createdEventId) {
         throw new Error("Could not locate EventCreated log in the transaction receipt.");
       }
+      const { data: registeredEvent } = await apiClient.post("/event/self-custody/register", {
+        eventId: createdEventId,
+      });
 
       toast.success("Event deployed with your wallet");
-      setSelfCustodyEvent({ id: createdEventId, name: formValues.name });
+      setSelfCustodyEvent({ id: registeredEvent.id, name: registeredEvent.name });
       form.reset();
     } catch (err: unknown) {
       console.error(err);
