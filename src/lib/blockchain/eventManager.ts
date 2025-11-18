@@ -1,7 +1,8 @@
 import { BrowserProvider, Contract, Interface, TransactionReceipt } from "ethers";
-import EventManagerABI from "@/lib/abis/EventManager.json";
+import EventManagerArtifact from "@/lib/abis/EventManager.json";
 import { ensureTargetNetwork } from "@/services/walletService";
 
+const EventManagerABI = EventManagerArtifact.abi;
 const eventManagerAddress = import.meta.env.VITE_EVENT_MANAGER_ADDRESS;
 
 if (!eventManagerAddress) {
@@ -34,4 +35,30 @@ export const extractEventIdFromReceipt = (receipt: TransactionReceipt) => {
     }
   }
   return null;
+};
+
+export const updateEventOnChain = async (
+  eventId: string,
+  name: string,
+  eventTimestamp: bigint,
+  metadataURI: string,
+  totalSupply: bigint,
+  priceInWei: bigint
+) => {
+  const { contract } = await getEventManagerContract();
+  const tx = await contract.updateEventDetails(
+    BigInt(eventId),
+    name,
+    eventTimestamp,
+    metadataURI,
+    totalSupply,
+    priceInWei
+  );
+  return await tx.wait();
+};
+
+export const deactivateEventOnChain = async (eventId: string) => {
+  const { contract } = await getEventManagerContract();
+  const tx = await contract.deactivateEvent(BigInt(eventId));
+  return await tx.wait();
 };

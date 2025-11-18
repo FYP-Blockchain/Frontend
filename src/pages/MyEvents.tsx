@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { fetchOrganizerEvents, deactivateEvent } from "@/features/events/eventSlice";
@@ -12,12 +12,17 @@ import { PlusCircle, Edit, Trash2, Eye, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import useSmoothScrollToTop from "@/hooks/useSmoothScrollToTop";
+import { isSelfCustodyEvent } from "@/lib/custody/custodyHelper";
+import { deactivateEventOnChain } from "@/lib/blockchain/eventManager";
+import apiClient from "@/services/api";
 
 const MyEvents = () => {
   useSmoothScrollToTop();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const { organizerEvents, loading, error } = useAppSelector((state) => state.events);
+  const walletAddress = useAppSelector((state) => state.wallet.address);
+  const [deactivatingEventId, setDeactivatingEventId] = useState<string | null>(null);
 
   useEffect(() => {
     dispatch(fetchOrganizerEvents());
@@ -29,7 +34,17 @@ const MyEvents = () => {
     }
   }, [error]);
 
-  const handleDeactivate = (eventId: string) => {
+  const handleDeactivate = async (event: any) => {
+    const isSelfCustody = isSelfCustodyEvent(event, walletAddress);
+    
+    if (isSelfCustody) {
+      await handleSelfCustodyDeactivation(event);
+    } else {
+      await handleBackendDeactivation(event.id);
+    }
+  };
+
+  const handleBackendDeactivation = async (eventId: string) => {
     dispatch(deactivateEvent(eventId)).then((result) => {
       if (deactivateEvent.fulfilled.match(result)) {
         toast.success("Event Deactivated", {
@@ -37,6 +52,23 @@ const MyEvents = () => {
         });
       }
     });
+  };
+
+  const handleSelfCustodyDeactivation = async (event: any) => {
+    setDeactivatingEventId(event.id);
+    try {
+      toast.info("Confirm the MetaMask transaction to deactivate your event.");
+      await deactivateEventOnChain(event.id);
+      await apiClient.post(`/event/cache/evict?eventId=${event.id}`);
+      toast.success("Event deactivated on-chain");
+      dispatch(fetchOrganizerEvents());
+    } catch (err: unknown) {
+      console.error(err);
+      const description = err instanceof Error ? err.message : "Something went wrong.";
+      toast.error("Self-custody deactivation failed", { description });
+    } finally {
+      setDeactivatingEventId(null);
+    }
   };
 
   const renderSkeleton = () => (
@@ -98,7 +130,12 @@ const MyEvents = () => {
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" disabled={!event.active}>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="text-destructive hover:text-destructive" 
+                              disabled={!event.active || deactivatingEventId === event.id}
+                            >
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </AlertDialogTrigger>
@@ -114,7 +151,7 @@ const MyEvents = () => {
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDeactivate(event.id)} className="bg-destructive hover:bg-destructive/90">
+                              <AlertDialogAction onClick={() => handleDeactivate(event)} className="bg-destructive hover:bg-destructive/90">
                                 Deactivate
                               </AlertDialogAction>
                             </AlertDialogFooter>
