@@ -16,5 +16,5 @@ export const OrganizerProtectedRoute = () => {
     return <Navigate to="/signin" />;
   }
 
-  return isOrganizer ? <Outlet /> : <Navigate to="/" />;
+  return isOrganizer ? <Outlet /> : <Navigate to="/unauthorized" />;
 };
