@@ -24,7 +24,7 @@ import { RootState } from "@/app/store";
 declare global {
   interface Window {
     ethereum?: {
-      request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+      request: (args: { method: string }) => Promise<unknown>;
       on: (event: string, callback: (...args: unknown[]) => void) => void;
       removeListener: (event: string, callback: (...args: unknown[]) => void) => void;
     };
@@ -43,31 +43,33 @@ const Navigation = () => {
   const isUser = currentUser?.roles?.includes('ROLE_USER');
 
   useEffect(() => {
-    let isMounted = true;
-    fetchExistingAccount().then((account) => {
-      if (account && isMounted) {
-        dispatch(setWalletAddress(account));
-      }
-    });
+    if (window.ethereum) {
+      window.ethereum.request({ method: "eth_accounts" }).then((accountsRaw) => {
+        const accounts = accountsRaw as string[];
+        if (Array.isArray(accounts) && accounts.length > 0) {
+          dispatch(setWalletAddress(accounts[0]));
+        }
+      });
 
-    const handleAccountsChanged = (accounts: string[]) => {
-      if (accounts.length > 0) {
-        dispatch(setWalletAddress(accounts[0]));
-        toast.dismiss();
-        toast.info(`Wallet switched: ${accounts[0].substring(0, 6)}...${accounts[0].slice(-4)}`);
-      } else {
-        dispatch(clearWalletAddress());
-        toast.dismiss();
-        toast.info("Wallet disconnected.");
-      }
-    };
+      const handleAccountsChanged = (accountsRaw: unknown) => {
+        const accounts = accountsRaw as string[];
+        if (Array.isArray(accounts) && accounts.length > 0) {
+          dispatch(setWalletAddress(accounts[0]));
+          toast.dismiss();
+          toast.info(`Wallet switched: ${accounts[0].substring(0, 6)}...${accounts[0].slice(-4)}`);
+        } else {
+          dispatch(clearWalletAddress());
+          toast.dismiss();
+          toast.info("Wallet disconnected.");
+        }
+      };
 
-    subscribeAccountChanges(handleAccountsChanged);
+      window.ethereum.on("accountsChanged", handleAccountsChanged);
 
-    return () => {
-      isMounted = false;
-      unsubscribeAccountChanges(handleAccountsChanged);
-    };
+      return () => {
+        window.ethereum?.removeListener("accountsChanged", handleAccountsChanged);
+      };
+    }
   }, [dispatch]);
 
   const handleLogout = async () => {
@@ -77,7 +79,7 @@ const Navigation = () => {
     toast.success("You have been logged out.");
     navigate("/");
   };
-  
+
   const connectWallet = async () => {
     if (!isMetaMaskAvailable()) {
       toast.info("MetaMask not found.", {
@@ -109,14 +111,15 @@ const Navigation = () => {
 
   const navItems = [
     { href: "/", label: "Home" },
-    // Only show "Events" if the user is NOT an organizer
     ...(!isOrganizer ? [{ href: "/events", label: "Events" }] : []),
     ...(isUser ? [{ href: "/my-tickets", label: "My Tickets" }] : []),
+    ...(isUser ? [{ href: "/ticket-qr", label: "Ticket QR" }] : []),
     ...(isOrganizer ? [{ href: "/create-event", label: "Create Event" }] : []),
     ...(isOrganizer ? [{ href: "/my-events", label: "My Events" }] : []),
+    ...(isOrganizer ? [{ href: "/verify-ticket", label: "Verify" }] : []),
     { href: "/about", label: "About" },
   ];
-  
+
   const isActive = (path: string) => location.pathname === path;
 
   return (
@@ -139,11 +142,10 @@ const Navigation = () => {
               <Link
                 key={item.href}
                 to={item.href}
-                className={`text-sm font-medium transition-colors hover:text-primary ${
-                  isActive(item.href)
+                className={`text-sm font-medium transition-colors hover:text-primary ${isActive(item.href)
                     ? "text-primary"
                     : "text-muted-foreground"
-                }`}
+                  }`}
               >
                 {item.label}
               </Link>
@@ -167,8 +169,7 @@ const Navigation = () => {
                 Connect Wallet
               </Button>
             )}
-            
-            
+
             {currentUser ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -214,11 +215,10 @@ const Navigation = () => {
                       key={item.href}
                       to={item.href}
                       onClick={() => setIsOpen(false)}
-                      className={`text-lg font-medium py-2 px-3 rounded-lg transition-colors ${
-                        isActive(item.href)
+                      className={`text-lg font-medium py-2 px-3 rounded-lg transition-colors ${isActive(item.href)
                           ? "text-primary bg-primary/10"
                           : "text-muted-foreground hover:text-primary"
-                      }`}
+                        }`}
                     >
                       {item.label}
                     </Link>
@@ -227,34 +227,28 @@ const Navigation = () => {
                     {currentUser ? (
                       <>
                         <div className="flex items-center px-3 py-2">
-                           <User className="h-5 w-5 mr-3 text-primary" />
-                           <div>
-                              <p className="font-semibold">{currentUser.username}</p>
-                              {isOrganizer && <Badge variant="secondary">Organizer</Badge>}
-                           </div>
+                          <User className="h-5 w-5 mr-3 text-primary" />
+                          <div>
+                            <p className="font-semibold">{currentUser.username}</p>
+                            {isOrganizer && <Badge variant="secondary">Organizer</Badge>}
+                          </div>
                         </div>
                         <Button onClick={handleLogout} variant="outline" className="w-full justify-start text-destructive">
-                           <LogOut className="h-4 w-4 mr-2" />
-                           Logout
+                          <LogOut className="h-4 w-4 mr-2" />
+                          Logout
                         </Button>
                       </>
                     ) : (
-                       <Link to="/signin" onClick={() => setIsOpen(false)}>
+                      <Link to="/signin" onClick={() => setIsOpen(false)}>
                         <Button className="w-full bg-gradient-primary">
                           Login / Signup
                         </Button>
                       </Link>
                     )}
-                    {walletAddress ? (
-                      <Button onClick={handleDisconnectWallet} variant="outline" className="w-full border-destructive/50 text-destructive hover:bg-destructive/10">
-                        Disconnect Wallet
-                      </Button>
-                    ) : (
-                      <Button onClick={connectWallet} variant="outline" className="w-full border-accent bg-accent/10 text-accent hover:bg-accent hover:text-accent-foreground">
-                        <Wallet className="h-4 w-4 mr-2" />
-                        Connect Wallet
-                      </Button>
-                    )}
+                    <Button onClick={connectWallet} variant="outline" className="w-full border-accent bg-accent/10 text-accent hover:bg-accent hover:text-accent-foreground">
+                      <Wallet className="h-4 w-4 mr-2" />
+                      Connect Wallet
+                    </Button>
                   </div>
                 </div>
               </SheetContent>

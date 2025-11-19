@@ -11,7 +11,7 @@ import useSmoothScrollToTop from "@/hooks/useSmoothScrollToTop";
 import EventDetailsSkeleton from "@/components/ui/EventDetailsSkeleton";
 import { format } from "date-fns";
 import {
-  Calendar, MapPin, Users, Shield, Clock, Share2, Heart
+  Calendar, MapPin, Users, Shield, Clock, Share2, Heart, QrCode, Edit
 } from "lucide-react";
 import { RootState } from "@/app/store";
 import { weiToEther } from "@/utils/formatter";
@@ -26,6 +26,7 @@ const EventDetails = () => {
   const { items: events, currentItem, loading, error } = useAppSelector((state: RootState) => state.events);
 
   const isOrganizer = currentUser?.roles?.includes('ROLE_ORGANIZER');
+
   const eventFromList = events.find((event: any) => event.id === id);
   useEffect(() => {
     if (!eventFromList && id) {
@@ -34,6 +35,7 @@ const EventDetails = () => {
   }, [id, eventFromList, dispatch]);
 
   const event = eventFromList || currentItem;
+  const isEventOwner = currentUser && event && event.organizerAddress?.toLowerCase() === currentUser.walletAddress?.toLowerCase();
 
   const handlePurchaseClick = () => {
     if (isOrganizer) {
@@ -164,21 +166,75 @@ const EventDetails = () => {
           <div className="space-y-6">
             <Card className="bg-glass/80 backdrop-blur-glass border-glass-border sticky top-24">
               <CardHeader>
-                <CardTitle className="text-center">Secure Your Ticket</CardTitle>
+                <CardTitle className="text-center">
+                  {isEventOwner ? 'Manage Event' : 'Secure Your Ticket'}
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-primary mb-1">{weiToEther(event.priceInWei)} ETH</div>
-                </div>
-                <Separator className="bg-glass-border" />
-                <Button
-                  variant="hero"
-                  size="lg"
-                  className="w-full text-base font-semibold"
-                  onClick={handlePurchaseClick}
-                >
-                  Purchase NFT Ticket
-                </Button>
+                {isEventOwner ? (
+                  <>
+                    <div className="text-center py-4">
+                      <Badge variant="outline" className="bg-primary/10 text-primary">
+                        <Shield className="h-3 w-3 mr-1" />
+                        You are the organizer
+                      </Badge>
+                    </div>
+                    <Separator className="bg-glass-border" />
+                    <div className="space-y-3">
+                      <Button
+                        variant="hero"
+                        size="lg"
+                        className="w-full text-base font-semibold"
+                        onClick={() => navigate(`/verify-ticket/${event.id}`)}
+                      >
+                        <QrCode className="mr-2 h-5 w-5" />
+                        Verify Tickets
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="lg"
+                        className="w-full"
+                        onClick={() => navigate(`/edit-event/${event.id}`)}
+                        disabled={!event.active}
+                      >
+                        <Edit className="mr-2 h-4 w-4" />
+                        Edit Event
+                      </Button>
+                    </div>
+                    <Separator className="bg-glass-border" />
+                    <div className="text-sm text-muted-foreground space-y-2">
+                      <div className="flex justify-between">
+                        <span>Total Tickets:</span>
+                        <span className="font-medium">{event.totalSupply}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Price:</span>
+                        <span className="font-medium">{weiToEther(event.priceInWei)} ETH</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Status:</span>
+                        <Badge variant={event.active ? "default" : "destructive"} className={event.active ? "bg-success" : ""}>
+                          {event.active ? "Active" : "Inactive"}
+                        </Badge>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-center">
+                      <div className="text-3xl font-bold text-primary mb-1">{weiToEther(event.priceInWei)} ETH</div>
+                    </div>
+                    <Separator className="bg-glass-border" />
+                    <Button
+                      variant="hero"
+                      size="lg"
+                      className="w-full text-base font-semibold"
+                      onClick={handlePurchaseClick}
+                    >
+                      Purchase NFT Ticket
+                    </Button>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>

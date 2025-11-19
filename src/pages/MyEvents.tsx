@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PlusCircle, Edit, Trash2, Eye, AlertTriangle } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Eye, AlertTriangle, QrCode } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import useSmoothScrollToTop from "@/hooks/useSmoothScrollToTop";
@@ -122,20 +122,25 @@ const MyEvents = () => {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right space-x-2">
-                        <Button variant="ghost" size="icon" onClick={() => navigate(`/event/${event.id}`)}>
+                        <Button variant="ghost" size="icon" onClick={() => navigate(`/event/${event.id}`)} title="View Event">
                           <Eye className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => navigate(`/edit-event/${event.id}`)} disabled={!event.active}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => navigate(`/verify-ticket/${event.id}`)}
+                          disabled={!event.active}
+                          title="Verify Tickets"
+                          className="text-primary hover:text-primary/80"
+                        >
+                          <QrCode className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => navigate(`/edit-event/${event.id}`)} disabled={!event.active} title="Edit Event">
                           <Edit className="h-4 w-4" />
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="text-destructive hover:text-destructive" 
-                              disabled={!event.active || deactivatingEventId === event.id}
-                            >
+                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" disabled={!event.active} title="Deactivate Event">
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </AlertDialogTrigger>
