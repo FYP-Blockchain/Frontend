@@ -86,6 +86,7 @@ export const purchaseTicketWithMetaMask = async (
       fabricTicketId,
       tokenId: tokenId.toString(),
       transactionHash: receipt.hash,
+      eventId: params.eventId,
     });
 
     return {
