@@ -225,17 +225,27 @@ const VerifyTicket: React.FC = () => {
                setResult(res.data);
                toast.success(res.data.message || 'Verification complete');
           } catch (e) {
-               const err = e as { response?: { data?: { message?: string }; status?: number } };
+               const err = e as { response?: { data?: string; status?: number } };
                console.error('Verification error:', err);
 
-               if (err.response?.status === 401) {
-                    toast.error('Authentication failed - Please log in again');
-               } else if (err.response?.status === 403) {
-                    toast.error('Access denied - ORGANIZER role required to verify tickets');
-               } else if (err.response?.status === 404) {
-                    toast.error('Ticket or event not found');
+               if (err.response) {
+                    const statusCode = err.response.status;
+                    const errorMessage = err.response.data || 'An unexpected error occurred.';
+
+                    // Display the error message in the snackbar
+                    if (statusCode === 400) {
+                         toast.error(errorMessage);
+                    } else if (statusCode === 401) {
+                         toast.error('Authentication failed - ' + errorMessage);
+                    } else if (statusCode === 403) {
+                         toast.error('Access denied - ' + errorMessage);
+                    } else if (statusCode === 404) {
+                         toast.error('Not Found - ' + errorMessage);
+                    } else {
+                         toast.error('Error: ' + errorMessage);
+                    }
                } else {
-                    toast.error(err.response?.data?.message || 'Verification failed');
+                    toast.error('Network error or server is unreachable.');
                }
           } finally {
                setVerifying(false);
