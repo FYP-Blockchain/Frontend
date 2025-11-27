@@ -23,7 +23,7 @@ import {
   QrCode
 } from "lucide-react";
 import { createTicket, resetTicketState } from "@/features/ticket/ticketSlice";
-import { addNFTToWallet } from "@/services/walletService";
+import { addNFTToWallet, ensureTargetNetwork } from "@/services/walletService";
 import { checkNFTOwnership } from "@/lib/helpers/ticketNFT";
 import { purchaseTicketWithMetaMask } from "@/lib/helpers/ticketPurchase";
 import { resetPaymentState } from "@/features/payment/paymentSlice";
@@ -34,31 +34,10 @@ import { format } from "date-fns";
 import EventDetailsSkeleton from "@/components/ui/EventDetailsSkeleton";
 import { weiToEther } from "@/utils/formatter";
 import { ethers } from "ethers";
+import { getSeatsForEvent, initializeSeatsForEvent } from "@/services/api";
+import { toast } from "sonner";
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_your_stripe_publishable_key');
-
-// Function to generate 50 seats with A1, B1 format
-const generateSeats = () => {
-  const seats = [];
-  const rows = ['A', 'B', 'C', 'D', 'E'];
-  const seatsPerRow = 10;
-  let availableCount = 0;
-  for (const row of rows) {
-    for (let i = 1; i <= seatsPerRow; i++) {
-      const seatNumber = `${row}${i}`;
-      // For demonstration, seats are available in a pattern
-      const isAvailable = availableCount < 25;
-      seats.push({
-        number: seatNumber,
-        isAvailable: isAvailable,
-      });
-      availableCount++;
-    }
-  }
-  return seats;
-};
-
-const allSeats = generateSeats();
 
 const PurchaseTicket = () => {
   useSmoothScrollToTop();
@@ -84,6 +63,8 @@ const PurchaseTicket = () => {
   const [cryptoError, setCryptoError] = useState(null);
   const [cryptoSuccess, setCryptoSuccess] = useState(false);
   const [cryptoTicketId, setCryptoTicketId] = useState(null);
+  const [seats, setSeats] = useState<Array<{ seatNumber: string; isAvailable: boolean }>>([]);
+  const [seatsLoading, setSeatsLoading] = useState(false);
 
   const eventFromList = events.find((event: any) => event.id === id);
 
@@ -94,6 +75,41 @@ const PurchaseTicket = () => {
   }, [id, eventFromList, dispatch]);
 
   const event = eventFromList || currentItem;
+
+  // Fetch seats from backend
+  useEffect(() => {
+    const fetchSeats = async () => {
+      if (!event?.id || !event?.totalSupply) return;
+      
+      setSeatsLoading(true);
+      try {
+        const response = await getSeatsForEvent(event.id);
+        if (response.data && response.data.length > 0) {
+          setSeats(response.data);
+        } else {
+          // If no seats exist, try to initialize them
+          console.log("No seats found, attempting to initialize...");
+          try {
+            await initializeSeatsForEvent(event.id, event.totalSupply);
+            toast.success("Seats initialized successfully!");
+            // Refetch after initialization
+            const retryResponse = await getSeatsForEvent(event.id);
+            setSeats(retryResponse.data || []);
+          } catch (initError) {
+            console.error("Failed to initialize seats:", initError);
+            toast.error("Failed to initialize seats. Please try refreshing the page.");
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch seats:", error);
+        toast.error("Failed to load seat availability");
+      } finally {
+        setSeatsLoading(false);
+      }
+    };
+
+    fetchSeats();
+  }, [event?.id, event?.totalSupply]);
 
   const quantity = selectedSeat ? 1 : 0;
   const priceInEthString = event ? weiToEther(event.priceInWei) : "0.000";
@@ -175,6 +191,14 @@ const PurchaseTicket = () => {
 
       setCryptoTicketId(result.tokenId);
       setCryptoSuccess(true);
+
+      // Refetch seats to update availability
+      try {
+        const response = await getSeatsForEvent(event.id);
+        setSeats(response.data);
+      } catch (error) {
+        console.error("Failed to refresh seats:", error);
+      }
       console.log('Purchase successful:', result);
     } catch (err: any) {
       console.error('Crypto purchase failed:', err);
@@ -205,6 +229,22 @@ const PurchaseTicket = () => {
   };
 
   useEffect(() => {
+    // Refetch seats when ticket purchase succeeds
+    const refetchSeats = async () => {
+      if (success && event?.id) {
+        try {
+          const response = await getSeatsForEvent(event.id);
+          setSeats(response.data);
+        } catch (error) {
+          console.error("Failed to refresh seats:", error);
+        }
+      }
+    };
+    
+    refetchSeats();
+  }, [success, event?.id]);
+
+  useEffect(() => {
     // Cleanup function only runs when component unmounts
     return () => {
       dispatch(resetTicketState());
@@ -219,6 +259,10 @@ const PurchaseTicket = () => {
         throw new Error('TicketNFT contract address not configured');
       }
 
+      if (!window.ethereum) {
+        throw new Error('MetaMask is not installed');
+      }
+
       const displayTicketId = cryptoSuccess ? cryptoTicketId : ticketId;
       
       if (!displayTicketId) {
@@ -227,7 +271,7 @@ const PurchaseTicket = () => {
 
       // Convert ticket ID to string and ensure it's a valid format
       const tokenIdString = displayTicketId.toString();
-      console.log('Checking ownership for token ID:', tokenIdString);
+      console.log('Adding NFT to MetaMask - Token ID:', tokenIdString);
 
       // Wait a moment for blockchain to sync (especially after backend minting)
       if (!cryptoSuccess) {
@@ -235,62 +279,55 @@ const PurchaseTicket = () => {
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
 
-      // First, verify ownership on the blockchain
+      // Verify ownership on the blockchain
       const isOwner = await checkNFTOwnership(tokenIdString, walletAddress);
       
       if (!isOwner) {
-        alert('⚠️ Ownership verification failed.\n\nThe NFT may still be processing on the blockchain. This can happen if:\n\n1. The transaction is still pending\n2. The backend minting failed\n3. The blockchain needs more time to sync\n\nPlease wait a few seconds and try again. If the problem persists, contact support with this ticket ID: ' + tokenIdString);
+        toast.error('⚠️ Ownership verification failed. The NFT may still be processing on the blockchain. Please wait a few seconds and try again.');
         return;
       }
 
-      // Copy details to clipboard for convenience
-      try {
-        await navigator.clipboard.writeText(`${ticketNFTAddress}\n${tokenIdString}`);
-      } catch (e) {
-        // Clipboard copy is optional, ignore errors
+      // Ensure we're on the correct network
+      await ensureTargetNetwork();
+
+      // Automatically add NFT to MetaMask using wallet_watchAsset
+      const wasAdded = await window.ethereum.request({
+        method: 'wallet_watchAsset',
+        params: {
+          type: 'ERC721',
+          options: {
+            address: ticketNFTAddress,
+            tokenId: tokenIdString,
+          },
+        },
+      });
+
+      if (wasAdded) {
+        toast.success('🎉 NFT ticket successfully added to MetaMask! Check your NFTs tab.');
+      } else {
+        toast.info('NFT was not added. You can manually import it later from MetaMask.');
       }
 
-      // Show confirmation dialog and offer to open MetaMask
-      const userConfirmed = window.confirm(
-        `✅ NFT Ownership Verified!\n\n` +
-        `Your ticket NFT is confirmed on the blockchain.\n\n` +
-        `Contract: ${ticketNFTAddress}\n` +
-        `Token ID: ${tokenIdString}\n\n` +
-        `📋 Details copied to clipboard!\n\n` +
-        `To view in MetaMask:\n` +
-        `1. Click OK to open MetaMask\n` +
-        `2. Go to NFTs tab\n` +
-        `3. Click "Import NFT"\n` +
-        `4. Paste the contract address (from clipboard)\n` +
-        `5. Enter token ID: ${tokenIdString}\n\n` +
-        `Click OK to open MetaMask, or Cancel to dismiss.`
-      );
-
-      if (userConfirmed && window.ethereum) {
-        // Open MetaMask by requesting accounts
+    } catch (error: any) {
+      console.error('Error adding NFT to wallet:', error);
+      
+      // Fallback: show manual instructions if automatic add fails
+      if (error.code === 4001) {
+        toast.error('You rejected the request to add the NFT.');
+      } else {
+        const ticketNFTAddress = import.meta.env.VITE_TICKET_NFT_ADDRESS;
+        const displayTicketId = cryptoSuccess ? cryptoTicketId : ticketId;
+        
+        toast.error(`Failed to automatically add NFT: ${error.message}`);
+        
+        // Copy details to clipboard as fallback
         try {
-          await window.ethereum.request({ method: 'eth_requestAccounts' });
-          
-          // Show follow-up reminder after MetaMask opens
-          setTimeout(() => {
-            alert(
-              `MetaMask is now open!\n\n` +
-              `📍 Next steps:\n` +
-              `1. Click on the "NFTs" tab\n` +
-              `2. Click "Import NFT"\n` +
-              `3. Paste contract address:\n   ${ticketNFTAddress}\n` +
-              `4. Enter token ID:\n   ${tokenIdString}\n\n` +
-              `💡 Details are in your clipboard - just paste!`
-            );
-          }, 500);
-        } catch (error) {
-          console.error('Error opening MetaMask:', error);
+          await navigator.clipboard.writeText(`Contract: ${ticketNFTAddress}\nToken ID: ${displayTicketId}`);
+          toast.info('📋 NFT details copied to clipboard for manual import.');
+        } catch (e) {
+          console.error('Failed to copy to clipboard:', e);
         }
       }
-
-    } catch (error) {
-      console.error('Error verifying NFT:', error);
-      alert(`Failed to verify NFT: ${error.message}`);
     }
   };
 
@@ -448,20 +485,11 @@ const PurchaseTicket = () => {
                   <div className="flex items-center">
                     <Users className="h-4 w-4 text-primary mr-3" />
                     <div>
-                      <div className="font-medium text-sm">{allSeats.filter(s => s.isAvailable).length} available</div>
-                      <div className="text-xs text-muted-foreground">of {event.totalSupply} total tickets</div>
+                      <div className="font-medium text-sm">{seats.filter(s => s.isAvailable).length} available</div>
                     </div>
                   </div>
 
-                  <div className="flex items-center">
-                    <Clock className="h-4 w-4 text-primary mr-3" />
-                    <div>
-                      <div className="font-medium text-sm truncate" title={event.organizerAddress}>
-                        By {event.organizerAddress.substring(0, 6)}...{event.organizerAddress.substring(event.organizerAddress.length - 4)}
-                      </div>
-                      <div className="text-xs text-muted-foreground">Trusted organizer</div>
-                    </div>
-                  </div>
+                
                 </div>
               </CardContent>
             </Card>
@@ -501,32 +529,52 @@ const PurchaseTicket = () => {
                       Selected: {selectedSeat ? 1 : 0} / 1
                     </span>
                   </div>
-                  <div className="grid grid-cols-5 md:grid-cols-10 gap-2 overflow-y-auto max-h-[300px] p-2 bg-glass/20 rounded-lg border border-glass-border">
-                    {allSeats.map((seat) => (
-                      <Button
-                        key={seat.number}
-                        variant={
-                          selectedSeat === seat.number
-                            ? "hero"
-                            : seat.isAvailable
-                              ? "glass"
-                              : "secondary"
-                        }
-                        size="sm"
-                        className={`font-semibold transition-transform duration-200 hover:scale-105 ${!seat.isAvailable && "opacity-50 cursor-not-allowed"
-                          }`}
-                        disabled={!seat.isAvailable && selectedSeat !== seat.number}
-                        onClick={() => handleSeatSelection(seat.number)}
-                      >
-                        {seat.number}
-                      </Button>
-                    ))}
-                  </div>
+                  {seatsLoading ? (
+                    <div className="text-center py-8 text-muted-foreground">Loading seats...</div>
+                  ) : seats.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">No seats available</div>
+                  ) : (
+                    <div className="grid grid-cols-5 md:grid-cols-10 gap-2 overflow-y-auto max-h-[300px] p-2 bg-glass/20 rounded-lg border border-glass-border">
+                      {seats.map((seat) => (
+                        <Button
+                          key={seat.seatNumber}
+                          variant={
+                            selectedSeat === seat.seatNumber
+                              ? "hero"
+                              : seat.isAvailable
+                                ? "glass"
+                                : "secondary"
+                          }
+                          size="sm"
+                          className={`font-semibold transition-transform duration-200 hover:scale-105 ${!seat.isAvailable && "opacity-50 cursor-not-allowed"
+                            }`}
+                          disabled={!seat.isAvailable && selectedSeat !== seat.seatNumber}
+                          onClick={() => handleSeatSelection(seat.seatNumber)}
+                        >
+                          {seat.seatNumber}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
                   {selectedSeat && (
                     <div className="mt-4 text-sm text-center text-muted-foreground">
                       Selected Seat: <span className="font-medium text-primary">{selectedSeat}</span>
                     </div>
                   )}
+                  <div className="mt-4 flex justify-center gap-4 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 rounded bg-primary"></div>
+                      <span>Selected</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 rounded bg-glass border border-glass-border"></div>
+                      <span>Available</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 rounded bg-secondary opacity-50"></div>
+                      <span>Occupied</span>
+                    </div>
+                  </div>
                 </div>
 
                 <Separator className="bg-glass-border" />
@@ -555,7 +603,7 @@ const PurchaseTicket = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
                     <Button
                       variant={selectedPayment === "crypto" ? "hero" : "glass"}
-                      className="h-16 flex-col justify-center"
+                      className="h-22 flex-col justify-center"
                       onClick={() => handlePaymentMethodChange("crypto")}
                     >
                       <Wallet className="h-5 w-5 mb-1" />
@@ -564,7 +612,7 @@ const PurchaseTicket = () => {
                     </Button>
                     <Button
                       variant={selectedPayment === "card" ? "hero" : "glass"}
-                      className="h-16 flex-col justify-center"
+                      className="h-22 flex-col justify-center"
                       onClick={() => handlePaymentMethodChange("card")}
                     >
                       <CreditCard className="h-5 w-5 mb-1" />
