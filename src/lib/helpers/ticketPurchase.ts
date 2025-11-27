@@ -51,7 +51,7 @@ export const purchaseTicketWithMetaMask = async (
       initialOwner: params.buyerAddress,
     });
 
-    const { fabricTicketId: fbId, ipfsCid, commitmentHash, tokenId } = fabricResponse.data;
+    const { fabricTicketId: fbId, ipfsCid, commitmentHash, tokenId, seat } = fabricResponse.data;
     fabricTicketId = fbId;
 
     // Step 2: Mint NFT with payment via MetaMask
@@ -89,6 +89,7 @@ export const purchaseTicketWithMetaMask = async (
       transactionHash: receipt.hash,
       eventId: params.eventId,
       ipfsCid: ipfsCid,
+      seat: seat,
     });
 
     return {

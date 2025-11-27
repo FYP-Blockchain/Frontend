@@ -47,3 +47,20 @@ export const verifyTicket = (payload) => {
 
   return apiClient.post("/verification/verify", payload);
 };
+
+// Seat management APIs
+export const getSeatsForEvent = (eventId) => {
+  return apiClient.get(`/seats/event/${eventId}`);
+};
+
+export const getAvailableSeatCount = (eventId) => {
+  return apiClient.get(`/seats/event/${eventId}/available-count`);
+};
+
+export const checkSeatAvailability = (eventId, seatNumber) => {
+  return apiClient.get(`/seats/event/${eventId}/seat/${seatNumber}/available`);
+};
+
+export const initializeSeatsForEvent = (eventId, totalSupply) => {
+  return apiClient.post(`/seats/event/${eventId}/initialize?totalSupply=${totalSupply}`);
+};
