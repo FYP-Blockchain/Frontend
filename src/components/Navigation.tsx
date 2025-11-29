@@ -112,7 +112,6 @@ const Navigation = () => {
   const navItems = [
     { href: "/", label: "Home" },
     ...(!isOrganizer ? [{ href: "/events", label: "Events" }] : []),
-    ...(isUser ? [{ href: "/my-tickets", label: "My Tickets" }] : []),
     ...(isUser ? [{ href: "/ticket-qr", label: "Ticket QR" }] : []),
     ...(isOrganizer ? [{ href: "/create-event", label: "Create Event" }] : []),
     ...(isOrganizer ? [{ href: "/my-events", label: "My Events" }] : []),
@@ -183,7 +182,7 @@ const Navigation = () => {
                   <DropdownMenuLabel>My Account</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   {/* <DropdownMenuItem onClick={() => navigate('/profile')}>Profile</DropdownMenuItem> */}
-                  {isUser && <DropdownMenuItem onClick={() => navigate('/my-tickets')}>My Tickets</DropdownMenuItem>}
+                  {isUser && <DropdownMenuItem onClick={() => navigate('/ticket-qr')}>QR generation</DropdownMenuItem>}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
                     <LogOut className="h-4 w-4 mr-2" />

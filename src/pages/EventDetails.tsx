@@ -48,6 +48,8 @@ const EventDetails = () => {
     if (currentUser) {
       navigate(`/purchaseticket/${event.id}`);
     } else {
+      // Store the intended destination before redirecting to login
+      localStorage.setItem('redirectAfterLogin', `/purchaseticket/${event.id}`);
       navigate('/signin');
     }
   };

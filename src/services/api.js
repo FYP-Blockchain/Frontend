@@ -64,3 +64,8 @@ export const checkSeatAvailability = (eventId, seatNumber) => {
 export const initializeSeatsForEvent = (eventId, totalSupply) => {
   return apiClient.post(`/seats/event/${eventId}/initialize?totalSupply=${totalSupply}`);
 };
+
+// Ticket metadata API
+export const getTicketMetadata = (tokenId) => {
+  return apiClient.get(`/ticket/metadata/${tokenId}`);
+};

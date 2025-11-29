@@ -61,14 +61,7 @@ const App = () => (
                 <Route path="/verify-ticket/:eventId" element={<VerifyTicket />} />
               </Route>
               <Route element={<UserProtectedRoute />}>
-                <Route path="/my-tickets" element={
-                  <div className="min-h-screen bg-gradient-hero flex items-center justify-center">
-                    <div className="text-center">
-                      <h1 className="text-4xl font-bold bg-gradient-primary bg-clip-text text-transparent mb-4">My Tickets</h1>
-                      <p className="text-xl text-muted-foreground">Coming soon - View your NFT tickets here</p>
-                    </div>
-                  </div>
-                } />
+              
                 <Route path="/ticket-qr" element={<TicketQr />} />
               </Route>
 

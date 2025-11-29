@@ -370,10 +370,20 @@ const VerifyTicket: React.FC = () => {
                               )}
                          </div>
                          {result && (
-                              <div className={`mt-4 p-4 rounded border ${result.success ? 'border-green-500 bg-green-50' : 'border-red-500 bg-red-50'}`}>
-                                   <p className="font-semibold">{result.message}</p>
-                                   {result.seat && <p className="text-sm mt-1">Seat: {result.seat}</p>}
-                                   {result.verifiedAt && <p className="text-sm mt-1">Verified At: {new Date(result.verifiedAt).toLocaleString()}</p>}
+                              <div className={`mt-4 p-4 rounded border ${result.success ? 'border-green-500 bg-green-50 dark:bg-green-950' : 'border-red-500 bg-red-50 dark:bg-red-950'}`}>
+                                   <p className={`font-semibold ${result.success ? 'text-green-900 dark:text-green-100' : 'text-red-900 dark:text-red-100'}`}>
+                                        {result.message}
+                                   </p>
+                                   {result.seat && (
+                                        <p className={`text-sm mt-1 ${result.success ? 'text-green-800 dark:text-green-200' : 'text-red-800 dark:text-red-200'}`}>
+                                             Seat: {result.seat}
+                                        </p>
+                                   )}
+                                   {result.verifiedAt && (
+                                        <p className={`text-sm mt-1 ${result.success ? 'text-green-800 dark:text-green-200' : 'text-red-800 dark:text-red-200'}`}>
+                                             Verified At: {new Date(result.verifiedAt).toLocaleString()}
+                                        </p>
+                                   )}
                               </div>
                          )}
                     </CardContent>
