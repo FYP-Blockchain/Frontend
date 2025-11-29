@@ -20,7 +20,8 @@ import {
   ArrowLeft,
   CheckCircle,
   AlertCircle,
-  QrCode
+  QrCode,
+  Loader2
 } from "lucide-react";
 import { createTicket, resetTicketState } from "@/features/ticket/ticketSlice";
 import { addNFTToWallet, ensureTargetNetwork } from "@/services/walletService";
@@ -65,6 +66,7 @@ const PurchaseTicket = () => {
   const [cryptoTicketId, setCryptoTicketId] = useState(null);
   const [seats, setSeats] = useState<Array<{ seatNumber: string; isAvailable: boolean }>>([]);
   const [seatsLoading, setSeatsLoading] = useState(false);
+  const [savingToWallet, setSavingToWallet] = useState(false);
 
   const eventFromList = events.find((event: any) => event.id === id);
 
@@ -253,6 +255,7 @@ const PurchaseTicket = () => {
   }, [dispatch]);
 
   const handleSaveToWallet = async () => {
+    setSavingToWallet(true);
     try {
       const ticketNFTAddress = import.meta.env.VITE_TICKET_NFT_ADDRESS;
       if (!ticketNFTAddress) {
@@ -284,6 +287,7 @@ const PurchaseTicket = () => {
       
       if (!isOwner) {
         toast.error('⚠️ Ownership verification failed. The NFT may still be processing on the blockchain. Please wait a few seconds and try again.');
+        setSavingToWallet(false);
         return;
       }
 
@@ -328,6 +332,8 @@ const PurchaseTicket = () => {
           console.error('Failed to copy to clipboard:', e);
         }
       }
+    } finally {
+      setSavingToWallet(false);
     }
   };
 
@@ -392,9 +398,19 @@ const PurchaseTicket = () => {
                       size="lg"
                       className="w-full text-base font-semibold"
                       onClick={handleSaveToWallet}
+                      disabled={savingToWallet}
                     >
-                      <Wallet className="h-5 w-5 mr-2" />
-                      Save NFT Ticket to Wallet
+                      {savingToWallet ? (
+                        <>
+                          <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                          Saving to Wallet...
+                        </>
+                      ) : (
+                        <>
+                          <Wallet className="h-5 w-5 mr-2" />
+                          Save NFT Ticket to Wallet
+                        </>
+                      )}
                     </Button>
                     <p className="text-xs text-muted-foreground mt-2">
                       Click to add this NFT to your crypto wallet.

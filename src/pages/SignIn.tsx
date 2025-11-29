@@ -43,7 +43,15 @@ const SignIn = () => {
       toast.success("Welcome back!", {
         description: "You have been successfully signed in.",
       });
-      navigate('/'); 
+      
+      // Check if there's a redirect path stored (e.g., user was trying to purchase a ticket)
+      const redirectPath = localStorage.getItem('redirectAfterLogin');
+      if (redirectPath) {
+        localStorage.removeItem('redirectAfterLogin'); // Clean up
+        navigate(redirectPath);
+      } else {
+        navigate('/'); 
+      }
     }
     if (error) {
       toast.error("Sign In Failed", {
