@@ -113,6 +113,7 @@ const Navigation = () => {
     { href: "/", label: "Home" },
     ...(!isOrganizer ? [{ href: "/events", label: "Events" }] : []),
     ...(isUser ? [{ href: "/ticket-qr", label: "Ticket QR" }] : []),
+    ...(isUser ? [{ href: "/my-tickets", label: "My Tickets" }] : []),
     ...(isOrganizer ? [{ href: "/create-event", label: "Create Event" }] : []),
     ...(isOrganizer ? [{ href: "/my-events", label: "My Events" }] : []),
     ...(isOrganizer ? [{ href: "/verify-ticket", label: "Verify" }] : []),
