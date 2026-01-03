@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAppSelector } from '@/app/hooks';
 import { RootState } from '@/app/store';
 import { getQrData } from '@/services/api';
@@ -21,6 +22,7 @@ interface NFTItem {
 }
 
 const TicketQr: React.FC = () => {
+     const [searchParams] = useSearchParams();
      const walletAddress = useAppSelector((state: RootState) => state.wallet.address);
      const { currentUser } = useAppSelector((state: RootState) => state.auth);
      const [tokenId, setTokenId] = useState('');
@@ -30,6 +32,15 @@ const TicketQr: React.FC = () => {
      const [userNFTs, setUserNFTs] = useState<NFTItem[]>([]);
      const [showNFTSelection, setShowNFTSelection] = useState(false);
      const qrRef = useRef<HTMLDivElement>(null);
+
+     // Auto-fill tokenId from URL query parameter and generate QR
+     useEffect(() => {
+          const tokenIdFromUrl = searchParams.get('tokenId');
+          if (tokenIdFromUrl && walletAddress && currentUser) {
+               setTokenId(tokenIdFromUrl);
+               fetchQrDataForToken(tokenIdFromUrl);
+          }
+     }, [searchParams, walletAddress, currentUser]);
 
      const fetchUserNFTs = async () => {
           if (!walletAddress) {

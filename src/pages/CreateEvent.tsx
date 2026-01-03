@@ -8,7 +8,8 @@ import { createEvent, clearLastCreatedEvent } from "@/features/events/eventSlice
 import { setWalletAddress, clearWalletAddress } from "@/features/wallet/walletReducer";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarIcon, Tag, Loader2, Wallet, ShieldCheck, AlertCircle } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { CalendarIcon, Tag, Loader2, Wallet, ShieldCheck, AlertCircle, TrendingUp, Percent } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -38,6 +39,10 @@ const eventSchema = z.object({
   imageFile: z.instanceof(FileList).refine(files => files?.length === 1, "Event image is required."),
   category: z.string().min(1, "Category is required"),
   location: z.string().min(3, "Location is required"),
+  // Resale configuration
+  resaleAllowed: z.boolean().default(true),
+  maxResalePriceMultiplier: z.coerce.number().min(100, "Must be at least 100%").max(500, "Cannot exceed 500%").default(150),
+  organizerResaleShare: z.coerce.number().min(0, "Cannot be negative").max(50, "Cannot exceed 50%").default(10),
 });
 
 type EventFormData = z.infer<typeof eventSchema>;
@@ -115,6 +120,10 @@ const CreateEvent = () => {
       eventEndTime: "23:00",
       category: "",
       location: "",
+      // Resale defaults
+      resaleAllowed: true,
+      maxResalePriceMultiplier: 150,
+      organizerResaleShare: 10,
     },
   });
 
@@ -139,6 +148,10 @@ const CreateEvent = () => {
       formData.append('imageFile', compressedImageFile, originalImageFile.name);
       formData.append('category', data.category);
       formData.append('location', data.location);
+      // Resale configuration
+      formData.append('resaleAllowed', String(data.resaleAllowed));
+      formData.append('maxResalePriceMultiplier', data.maxResalePriceMultiplier.toString());
+      formData.append('organizerResaleShare', (data.organizerResaleShare * 100).toString()); // Convert to basis points
 
       setIsCompressing(false);
 
@@ -203,6 +216,9 @@ const CreateEvent = () => {
       const normalizedEventDate = `${eventDateUTC}T00:00:00Z`;
       const ticketPrice = parseEther(formValues.priceInEther.toString());
       const eventTimestamp = BigInt(Math.floor(new Date(normalizedEventDate).getTime() / 1000));
+      
+      // Convert resale share from percentage to basis points (e.g., 10% = 1000 bps)
+      const organizerResaleShareBps = BigInt(formValues.organizerResaleShare * 100);
 
       const { contract } = await getEventManagerContract();
       toast.info("Confirm the MetaMask transaction to publish your event.");
@@ -211,7 +227,10 @@ const CreateEvent = () => {
         eventTimestamp,
         BigInt(formValues.totalSupply),
         ticketPrice,
-        metadataURI
+        metadataURI,
+        BigInt(formValues.maxResalePriceMultiplier),
+        organizerResaleShareBps,
+        formValues.resaleAllowed
       );
 
       const receipt = await tx.wait();
@@ -472,6 +491,92 @@ const CreateEvent = () => {
                       <FormMessage />
                     </FormItem>
                   )} />
+
+                  {/* Resale Configuration Section */}
+                  <div className="pt-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <TrendingUp className="h-5 w-5 text-primary" />
+                      <h3 className="text-lg font-semibold">Ticket Resale Configuration</h3>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Configure how your tickets can be resold on the marketplace. This helps prevent scalping while allowing legitimate resales.
+                    </p>
+                    
+                    <div className="space-y-4 bg-glass/20 p-4 rounded-lg border border-glass-border">
+                      <FormField control={form.control} name="resaleAllowed" render={({ field }) => (
+                        <FormItem className="flex items-center justify-between">
+                          <div>
+                            <FormLabel className="text-base">Allow Ticket Resale</FormLabel>
+                            <p className="text-sm text-muted-foreground">Enable ticket holders to resell on the marketplace</p>
+                          </div>
+                          <FormControl>
+                            <Switch checked={field.value} onCheckedChange={field.onChange} />
+                          </FormControl>
+                        </FormItem>
+                      )} />
+                      
+                      {form.watch("resaleAllowed") && (
+                        <>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                            <FormField control={form.control} name="maxResalePriceMultiplier" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="flex items-center gap-1">
+                                  <Percent className="h-4 w-4" />
+                                  Max Resale Price (% of original)
+                                </FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    type="number" 
+                                    min="100" 
+                                    max="500" 
+                                    placeholder="e.g., 150" 
+                                    className="bg-glass/30 border-glass-border" 
+                                    {...field} 
+                                  />
+                                </FormControl>
+                                <p className="text-xs text-muted-foreground">
+                                  e.g., 150% means tickets can be resold for up to 1.5x the original price
+                                </p>
+                                <FormMessage />
+                              </FormItem>
+                            )} />
+                            
+                            <FormField control={form.control} name="organizerResaleShare" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="flex items-center gap-1">
+                                  <TrendingUp className="h-4 w-4" />
+                                  Your Share of Resale Profit (%)
+                                </FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    type="number" 
+                                    min="0" 
+                                    max="50" 
+                                    placeholder="e.g., 10" 
+                                    className="bg-glass/30 border-glass-border" 
+                                    {...field} 
+                                  />
+                                </FormControl>
+                                <p className="text-xs text-muted-foreground">
+                                  % of profit (above original price) you receive on each resale
+                                </p>
+                                <FormMessage />
+                              </FormItem>
+                            )} />
+                          </div>
+                          
+                          <div className="bg-primary/10 p-3 rounded-md text-sm">
+                            <p className="font-medium text-primary">Example:</p>
+                            <p className="text-muted-foreground">
+                              If original price is 0.1 ETH and max resale is {form.watch("maxResalePriceMultiplier")}%, 
+                              tickets can be resold for up to {(0.1 * form.watch("maxResalePriceMultiplier") / 100).toFixed(4)} ETH.
+                              On a resale at max price, you would receive {form.watch("organizerResaleShare")}% of the {((0.1 * form.watch("maxResalePriceMultiplier") / 100) - 0.1).toFixed(4)} ETH profit.
+                            </p>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
 
                   <div className="pt-6">
                     <Button type="submit" variant="hero" size="lg" className="w-full text-lg" disabled={loading || isCompressing}>

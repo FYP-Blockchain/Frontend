@@ -11,7 +11,7 @@ import useSmoothScrollToTop from "@/hooks/useSmoothScrollToTop";
 import EventDetailsSkeleton from "@/components/ui/EventDetailsSkeleton";
 import { format } from "date-fns";
 import {
-  Calendar, MapPin, Users, Shield, Clock, Share2, Heart, QrCode, Edit
+  Calendar, MapPin, Users, Shield, Clock, Share2, Heart, QrCode, Edit, TrendingUp
 } from "lucide-react";
 import { RootState } from "@/app/store";
 import { weiToEther } from "@/utils/formatter";
@@ -235,6 +235,18 @@ const EventDetails = () => {
                     >
                       Purchase NFT Ticket
                     </Button>
+                    
+                    {event.resaleAllowed !== false && (
+                      <Button
+                        variant="outline"
+                        size="lg"
+                        className="w-full"
+                        onClick={() => navigate(`/resale/${event.id}`)}
+                      >
+                        <TrendingUp className="mr-2 h-4 w-4" />
+                        View Resale Marketplace
+                      </Button>
+                    )}
                   </>
                 )}
               </CardContent>
