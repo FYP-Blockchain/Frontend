@@ -7,7 +7,7 @@ export const createPaymentIntent = createAsyncThunk(
   async ({ eventId }, { rejectWithValue }) => {
     try {
       const response = await apiClient.post("/payments/createIntent", {
-        eventId: eventId,
+        eventId: String(eventId),
       });
       return response.data;
     } catch (error) {
