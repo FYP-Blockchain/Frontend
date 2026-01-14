@@ -69,3 +69,32 @@ export const initializeSeatsForEvent = (eventId, totalSupply) => {
 export const getTicketMetadata = (tokenId) => {
   return apiClient.get(`/ticket/metadata/${tokenId}`);
 };
+
+// Resale APIs
+export const listForResale = (data) => {
+  return apiClient.post('/resale/list', data);
+};
+
+export const unlistFromResale = (tokenId, ownerAddress) => {
+  return apiClient.post('/resale/unlist', null, {
+    params: { tokenId, ownerAddress }
+  });
+};
+
+export const confirmResalePurchase = (data) => {
+  return apiClient.post('/resale/confirm-purchase', data);
+};
+
+export const getResaleInfo = (tokenId) => {
+  return apiClient.get(`/resale/info/${tokenId}`);
+};
+
+export const getResaleListingsForEvent = (eventId) => {
+  return apiClient.get(`/resale/event/${eventId}`);
+};
+
+export const isUserRegisteredForResale = (walletAddress) => {
+  return apiClient.get('/resale/user/registered', {
+    params: { walletAddress }
+  });
+};

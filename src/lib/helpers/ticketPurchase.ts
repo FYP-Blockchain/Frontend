@@ -13,6 +13,9 @@ interface PurchaseWithMetaMaskParams {
   ticketPriceWei: string;
   organizerAddress: string;
   buyerAddress: string;
+  // Resale configuration (from event)
+  maxResalePriceMultiplier?: number;
+  organizerResaleShare?: number;
 }
 
 interface PurchaseResult {
@@ -51,8 +54,12 @@ export const purchaseTicketWithMetaMask = async (
       initialOwner: params.buyerAddress,
     });
 
-    const { fabricTicketId: fbId, ipfsCid, commitmentHash, tokenId, seat } = fabricResponse.data;
+    const { fabricTicketId: fbId, ipfsCid, commitmentHash, tokenId, seat, maxResalePriceMultiplier, organizerResaleShare } = fabricResponse.data;
     fabricTicketId = fbId;
+    
+    // Use resale config from backend response, or fallback to params
+    const resaleMultiplier = maxResalePriceMultiplier || params.maxResalePriceMultiplier || 150;
+    const resaleShare = organizerResaleShare || params.organizerResaleShare || 1000; // 10% in basis points
 
     // Step 2: Mint NFT with payment via MetaMask
     const ticketNFTContract = new ethers.Contract(
@@ -73,6 +80,9 @@ export const purchaseTicketWithMetaMask = async (
       commitmentHashBytes,
       params.organizerAddress,
       params.ticketPriceWei,
+      params.eventId, // eventId for resale tracking
+      resaleMultiplier,
+      resaleShare,
       {
         value: params.ticketPriceWei,
       }

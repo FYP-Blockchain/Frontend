@@ -22,6 +22,8 @@ import CreateEvent from "./pages/CreateEvent";
 import EditEvent from "./pages/EditEvent";
 import TicketQr from "./pages/TicketQr";
 import VerifyTicket from "./pages/VerifyTicket";
+import ResaleMarketplace from "./pages/ResaleMarketplace";
+import MyResaleListings from "./pages/MyResaleListings";
 
 const queryClient = new QueryClient();
 
@@ -44,6 +46,7 @@ const App = () => (
               <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route path="/terms" element={<TermsConditions />} />
               <Route path="/purchaseticket/:id" element={<PurchaseTicket />} />
+              <Route path="/resale/:id" element={<ResaleMarketplace />} />
 
               <Route path="/unauthorized" element={
                 <div className="min-h-screen bg-gradient-hero flex items-center justify-center">
@@ -63,6 +66,7 @@ const App = () => (
               <Route element={<UserProtectedRoute />}>
               
                 <Route path="/ticket-qr" element={<TicketQr />} />
+                <Route path="/my-tickets" element={<MyResaleListings />} />
               </Route>
 
               <Route path="*" element={<NotFound />} />
